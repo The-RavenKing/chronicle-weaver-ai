@@ -62,7 +62,12 @@ class Engine:
         new_state = state
         for event in events:
             new_state = reduce_state(new_state, event)
-        narrative = _narrative_stub(intent_result, dice_roll)
+        narrative = _narrative_stub(
+            intent_result=intent_result,
+            previous_mode=state.mode,
+            new_mode=new_state.mode,
+            dice_roll=dice_roll,
+        )
         output = EngineOutput(
             intent=intent_result.intent,
             mechanic=intent_result.mechanic,
@@ -153,6 +158,20 @@ def _build_events(
         )
     )
 
+    if (
+        intent_result.mechanic == Mechanic.DISENGAGE
+        and state.mode == GameMode.COMBAT
+        and new_mode == GameMode.EXPLORATION
+    ):
+        timestamp += 1
+        events.append(
+            Event(
+                event_type="combat_disengaged",
+                payload={"intent": intent_result.intent, "from_mode": state.mode},
+                timestamp=timestamp,
+            )
+        )
+
     timestamp += 1
     events.append(
         Event(
@@ -181,8 +200,19 @@ def _build_events(
 
 
 def _narrative_stub(
-    intent_result: IntentResult, dice_roll: DiceRollRecord | None
+    intent_result: IntentResult,
+    previous_mode: GameMode,
+    new_mode: GameMode,
+    dice_roll: DiceRollRecord | None,
 ) -> str:
+    if (
+        previous_mode == GameMode.COMBAT
+        and new_mode == GameMode.CONTESTED
+        and intent_result.intent in {Intent.TALK, Intent.SEARCH}
+    ):
+        return "Action requires clarification during combat."
+    if intent_result.mechanic == Mechanic.DISENGAGE:
+        return "You disengage and leave combat."
     if intent_result.mechanic == Mechanic.CLARIFY:
         return "Action is ambiguous. Please clarify your intent."
     if intent_result.mechanic == Mechanic.COMBAT_ROLL and dice_roll is not None:

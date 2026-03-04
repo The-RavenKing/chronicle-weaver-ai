@@ -22,6 +22,14 @@ def test_flee_routes_to_disengage() -> None:
     router = IntentRouter()
     result = router.route("flee now", current_mode=GameMode.COMBAT)
     assert result.intent == Intent.DISENGAGE
+    assert result.mechanic == Mechanic.DISENGAGE
+
+
+def test_end_combat_routes_to_disengage() -> None:
+    router = IntentRouter()
+    result = router.route("end combat", current_mode=GameMode.COMBAT)
+    assert result.intent == Intent.DISENGAGE
+    assert result.mechanic == Mechanic.DISENGAGE
 
 
 def test_unknown_routes_to_clarify() -> None:

@@ -29,6 +29,7 @@ class Mechanic(str, Enum):
     """Backend mechanic selection; never delegated to an LLM."""
 
     COMBAT_ROLL = "combat_roll"
+    DISENGAGE = "disengage"
     NARRATE_ONLY = "narrate_only"
     CLARIFY = "clarify"
 

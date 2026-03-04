@@ -49,7 +49,7 @@ class IntentRouter:
         if "end combat" in normalized:
             return IntentResult(
                 intent=Intent.DISENGAGE,
-                mechanic=Mechanic.NARRATE_ONLY,
+                mechanic=Mechanic.DISENGAGE,
                 confidence=0.95,
                 rationale="matched keyword: end combat",
             )
@@ -57,7 +57,7 @@ class IntentRouter:
         combat_keywords = ("attack", "strike", "hit")
         talk_keywords = ("talk", "speak")
         search_keywords = ("search", "look", "inspect")
-        disengage_keywords = ("flee", "run", "escape")
+        disengage_keywords = ("flee", "run", "escape", "retreat", "disengage")
 
         if _contains_any(normalized, combat_keywords):
             return IntentResult(
@@ -86,7 +86,7 @@ class IntentRouter:
         if _contains_any(normalized, disengage_keywords):
             return IntentResult(
                 intent=Intent.DISENGAGE,
-                mechanic=Mechanic.NARRATE_ONLY,
+                mechanic=Mechanic.DISENGAGE,
                 confidence=0.9,
                 rationale="matched disengage keyword",
             )
@@ -94,13 +94,16 @@ class IntentRouter:
         return None
 
     def _validate(self, result: IntentResult, current_mode: GameMode) -> IntentResult:
-        # Minimal validation for this slice: searching during combat becomes contested.
-        if current_mode == GameMode.COMBAT and result.intent == Intent.SEARCH:
+        # Minimal validation for this slice: social/exploration actions in combat are contested.
+        if current_mode == GameMode.COMBAT and result.intent in {
+            Intent.SEARCH,
+            Intent.TALK,
+        }:
             return IntentResult(
                 intent=result.intent,
                 mechanic=Mechanic.CLARIFY,
                 confidence=0.4,
-                rationale="search during combat needs clarification",
+                rationale="action during combat needs clarification",
                 is_valid=False,
             )
         return result

@@ -17,11 +17,31 @@ def test_attack_in_exploration_enters_combat() -> None:
 def test_disengage_in_combat_returns_exploration() -> None:
     intent_result = IntentResult(
         intent=Intent.DISENGAGE,
-        mechanic=Mechanic.NARRATE_ONLY,
+        mechanic=Mechanic.DISENGAGE,
         confidence=0.9,
         rationale="keyword",
     )
     assert transition(GameMode.COMBAT, intent_result) == GameMode.EXPLORATION
+
+
+def test_attack_in_combat_stays_combat() -> None:
+    intent_result = IntentResult(
+        intent=Intent.ATTACK,
+        mechanic=Mechanic.COMBAT_ROLL,
+        confidence=0.95,
+        rationale="keyword",
+    )
+    assert transition(GameMode.COMBAT, intent_result) == GameMode.COMBAT
+
+
+def test_talk_in_combat_goes_contested() -> None:
+    intent_result = IntentResult(
+        intent=Intent.TALK,
+        mechanic=Mechanic.NARRATE_ONLY,
+        confidence=0.9,
+        rationale="keyword",
+    )
+    assert transition(GameMode.COMBAT, intent_result) == GameMode.CONTESTED
 
 
 def test_ambiguous_result_enters_contested() -> None:
