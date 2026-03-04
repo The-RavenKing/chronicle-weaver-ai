@@ -1,0 +1,39 @@
+Metadata-Version: 2.4
+Name: chronicle-weaver
+Version: 0.1.0
+Summary: Chronicle Weaver deterministic AI RPG engine skeleton.
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: typer<1.0,>=0.12
+Provides-Extra: dev
+Requires-Dist: pytest<9,>=8; extra == "dev"
+Requires-Dist: ruff<1,>=0.4; extra == "dev"
+Requires-Dist: black<26,>=24; extra == "dev"
+Requires-Dist: mypy<2,>=1.10; extra == "dev"
+
+# Chronicle Weaver
+
+Phase-1 repository skeleton for a deterministic AI RPG engine.
+
+## Install dependencies
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+## Run tests
+
+```bash
+source .venv/bin/activate
+pytest -q
+```
+
+## Run CLI demo
+
+```bash
+source .venv/bin/activate
+chronicle-weaver demo --player-input "attack goblin" --seed 42
+```

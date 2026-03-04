@@ -1,0 +1,2 @@
+[console_scripts]
+chronicle-weaver = chronicle_weaver_ai.cli:app

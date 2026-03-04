@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chronicle-weaver"
+version = "0.1.0"
+description = "Chronicle Weaver deterministic AI RPG engine skeleton."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "typer>=0.12,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.4,<1",
+  "black>=24,<26",
+  "mypy>=1.10,<2",
+]
+
+[project.scripts]
+chronicle-weaver = "chronicle_weaver_ai.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
