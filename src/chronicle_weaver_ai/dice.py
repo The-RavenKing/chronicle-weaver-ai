@@ -86,3 +86,18 @@ def roll_d20_record(provider: DiceProvider) -> DiceRollRecord:
             provider=provider.source,
         )
         return record
+
+
+def roll_d20_record_from_entropy(entropy: int, provider: str) -> DiceRollRecord:
+    """Build a deterministic d20 record from a preselected entropy value."""
+    result = roll_d20(entropy)
+    if result is None:
+        raise ValueError("prefetched entropy must map directly to d20")
+    return DiceRollRecord(
+        sides=20,
+        entropy=entropy,
+        accepted_entropy=entropy,
+        value=result,
+        attempts=1,
+        provider=provider,
+    )

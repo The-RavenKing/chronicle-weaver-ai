@@ -1,0 +1,16 @@
+{
+  "id": "w.longsword",
+  "name": "Longsword",
+  "kind": "weapon",
+  "description": "A versatile one-handed sword with a strong cutting edge.",
+  "tags": ["martial", "versatile"],
+  "aliases": ["long sword"],
+  "damage": "1d8",
+  "damage_type": "slashing",
+  "properties": ["versatile"],
+  "attack_ability": "str",
+  "magic_bonus": 1,
+  "proficient_required": true,
+  "damage_bonus": 1,
+  "versatile_damage": "1d10"
+}

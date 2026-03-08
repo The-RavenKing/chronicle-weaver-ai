@@ -1,0 +1,39 @@
+{
+  "entities": [
+    {
+      "aliases": [],
+      "count": 1,
+      "entity_id": "7cf319441d12",
+      "kind": "pc",
+      "name": "player"
+    },
+    {
+      "aliases": [],
+      "count": 1,
+      "entity_id": "e5238edd4282",
+      "kind": "unknown",
+      "name": "goblin"
+    }
+  ],
+  "facts": [
+    {
+      "text": "Rolled d20=17",
+      "ts": 5,
+      "type": "dice"
+    }
+  ],
+  "relations": [
+    {
+      "evidence": {
+        "event_ts": 2,
+        "event_type": "intent_resolved"
+      },
+      "object_entity_id": "9337bc45018a",
+      "predicate": "attacked",
+      "relation_id": "ec8399d0bb2c",
+      "subject_entity_id": "7cf319441d12",
+      "ts_first_seen": 2,
+      "ts_last_seen": 2
+    }
+  ]
+}

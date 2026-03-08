@@ -1,0 +1,5 @@
+{"id": "205a0e8f066c", "kind": "entity", "payload": {"name": "goblin", "kind": "unknown", "count": 1}, "status": "approved", "source_session": "session_clean.jsonl", "ts": 1}
+{"id": "2b4d280797c8", "kind": "fact", "payload": {"type": "intent", "text": "Player intent: attack", "ts": 2}, "status": "pending", "source_session": "session_clean.jsonl", "ts": 2}
+{"id": "489bd0902192", "kind": "fact", "payload": {"type": "mode_transition", "text": "Mode changed exploration -> combat", "ts": 3}, "status": "pending", "source_session": "session_clean.jsonl", "ts": 3}
+{"id": "731a5e32e235", "kind": "fact", "payload": {"type": "entropy", "text": "Entropy source: drand", "ts": 4}, "status": "pending", "source_session": "session_clean.jsonl", "ts": 4}
+{"id": "889291fd3798", "kind": "fact", "payload": {"type": "dice", "text": "Rolled d20=17", "ts": 5}, "status": "approved", "source_session": "session_clean.jsonl", "ts": 5}

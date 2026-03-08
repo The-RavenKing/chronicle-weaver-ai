@@ -1,0 +1,26 @@
+{
+  "actor_id": "pc.wizard.sample",
+  "name": "Sample Wizard",
+  "class_name": "wizard",
+  "species_name": "human",
+  "level": 3,
+  "proficiency_bonus": 2,
+  "abilities": {
+    "str": 8,
+    "dex": 14,
+    "con": 12,
+    "int": 16,
+    "wis": 12,
+    "cha": 10
+  },
+  "equipped_weapon_ids": [],
+  "known_spell_ids": ["s.magic_missile"],
+  "feature_ids": [],
+  "item_ids": [],
+  "spell_slots": {
+    "1": 1
+  },
+  "resources": {},
+  "armor_class": 12,
+  "hit_points": 18
+}

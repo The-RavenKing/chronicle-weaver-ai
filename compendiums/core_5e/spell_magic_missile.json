@@ -1,0 +1,20 @@
+{
+  "id": "s.magic_missile",
+  "name": "Magic Missile",
+  "kind": "spell",
+  "description": "Three bolts of force streak from the caster to strike foes.",
+  "tags": ["evocation"],
+  "aliases": ["missile spell"],
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": "120 feet",
+  "components": ["V", "S"],
+  "duration": "instantaneous",
+  "action_type": "action",
+  "scaling_basis": "slot_level",
+  "attack_type": null,
+  "save_ability": null,
+  "auto_hit": true,
+  "effect_summary": "Create three force darts that automatically hit targets."
+}

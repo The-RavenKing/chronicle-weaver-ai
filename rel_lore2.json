@@ -1,0 +1,33 @@
+{
+  "entities": [
+    {
+      "aliases": [],
+      "count": 2,
+      "entity_id": "7cf319441d12",
+      "kind": "pc",
+      "name": "player"
+    },
+    {
+      "aliases": [],
+      "count": 2,
+      "entity_id": "e5238edd4282",
+      "kind": "unknown",
+      "name": "goblin"
+    }
+  ],
+  "facts": [],
+  "relations": [
+    {
+      "evidence": {
+        "event_ts": 2,
+        "event_type": "intent_resolved"
+      },
+      "object_entity_id": "e5238edd4282",
+      "predicate": "attacked",
+      "relation_id": "a26792f9d74f",
+      "subject_entity_id": "7cf319441d12",
+      "ts_first_seen": 2,
+      "ts_last_seen": 2
+    }
+  ]
+}

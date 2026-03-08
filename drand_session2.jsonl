@@ -1,0 +1,5 @@
+{"type": "player_input", "payload": {"text": "attack goblin"}, "ts": 1}
+{"type": "intent_resolved", "payload": {"intent": "attack", "mechanic": "combat_roll", "confidence": 0.95, "is_valid": true}, "ts": 2}
+{"type": "mode_transition", "payload": {"from_mode": "exploration", "to_mode": "combat"}, "ts": 3}
+{"type": "entropy_prefetched", "payload": {"round": 1, "initiative_order": ["player", "enemy"], "source": "drand", "drand_base_url": "https://api.drand.sh", "rounds_used": [5908878], "beacons": [{"round": 5908878, "randomness": "993b678fe8fd99432c16c15192726db3ae3df4380150b26a03d9a91bf598fc0a", "signature": "89a7b41e40c71ca35adf29541d71e2d9b05ce11e8f6ee397220622c855b3060c5ab2297fd0000945f2dc335349fb55e917bf7086d97c0be7a3735bb9f233d8531d153ffe51fe5f3952b9ec9cccd2b28940bb92a2f0826c38b1dcf565ee693ad5"}], "values": [2570807183, 3908933955, 739688785, 2456972723, 2923295800, 22065770, 64596251, 4120443914]}, "ts": 4}
+{"type": "dice_roll", "payload": {"value": 4, "entropy": 2570807183, "accepted_entropy": 2570807183, "attempts": 1, "provider": "prefetched_pool"}, "ts": 5}

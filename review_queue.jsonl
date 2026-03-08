@@ -1,0 +1,26 @@
+{"id": "855adfcd77db", "kind": "entity", "payload": {"name": "goblin", "kind": "unknown", "count": 3}, "status": "approved", "source_session": "session.jsonl", "ts": 1}
+{"id": "2b4d280797c8", "kind": "fact", "payload": {"type": "intent", "text": "Player intent: attack", "ts": 2}, "status": "pending", "source_session": "session.jsonl", "ts": 2}
+{"id": "489bd0902192", "kind": "fact", "payload": {"type": "mode_transition", "text": "Mode changed exploration -> combat", "ts": 3}, "status": "pending", "source_session": "session.jsonl", "ts": 3}
+{"id": "ce007de7a2ed", "kind": "fact", "payload": {"type": "dice", "text": "Rolled d20=15", "ts": 4}, "status": "pending", "source_session": "session.jsonl", "ts": 4}
+{"id": "126896fc79c8", "kind": "fact", "payload": {"type": "intent", "text": "Player intent: attack", "ts": 6}, "status": "pending", "source_session": "session.jsonl", "ts": 6}
+{"id": "5ee912965362", "kind": "fact", "payload": {"type": "mode_transition", "text": "Mode changed combat -> combat", "ts": 7}, "status": "pending", "source_session": "session.jsonl", "ts": 7}
+{"id": "bf91b78d3b9c", "kind": "fact", "payload": {"type": "dice", "text": "Rolled d20=18", "ts": 8}, "status": "pending", "source_session": "session.jsonl", "ts": 8}
+{"id": "e677aaf2ea1e", "kind": "fact", "payload": {"type": "intent", "text": "Player intent: disengage", "ts": 10}, "status": "pending", "source_session": "session.jsonl", "ts": 10}
+{"id": "611cfcaddf8b", "kind": "fact", "payload": {"type": "mode_transition", "text": "Mode changed combat -> exploration", "ts": 12}, "status": "pending", "source_session": "session.jsonl", "ts": 12}
+{"id": "2b4d280797c8", "kind": "fact", "payload": {"type": "intent", "text": "Player intent: attack", "ts": 2}, "status": "pending", "source_session": "session.jsonl", "ts": 2}
+{"id": "489bd0902192", "kind": "fact", "payload": {"type": "mode_transition", "text": "Mode changed exploration -> combat", "ts": 3}, "status": "pending", "source_session": "session.jsonl", "ts": 3}
+{"id": "731a5e32e235", "kind": "fact", "payload": {"type": "entropy", "text": "Entropy source: drand", "ts": 4}, "status": "pending", "source_session": "session.jsonl", "ts": 4}
+{"id": "f26d69ede6dc", "kind": "fact", "payload": {"type": "dice", "text": "Rolled d20=5", "ts": 5}, "status": "approved", "source_session": "session.jsonl", "ts": 5}
+{"id": "855adfcd77db", "kind": "entity", "payload": {"name": "goblin", "kind": "unknown", "count": 3}, "status": "approved", "source_session": "session.jsonl", "ts": 1}
+{"id": "2b4d280797c8", "kind": "fact", "payload": {"type": "intent", "text": "Player intent: attack", "ts": 2}, "status": "pending", "source_session": "session.jsonl", "ts": 2}
+{"id": "489bd0902192", "kind": "fact", "payload": {"type": "mode_transition", "text": "Mode changed exploration -> combat", "ts": 3}, "status": "pending", "source_session": "session.jsonl", "ts": 3}
+{"id": "ce007de7a2ed", "kind": "fact", "payload": {"type": "dice", "text": "Rolled d20=15", "ts": 4}, "status": "pending", "source_session": "session.jsonl", "ts": 4}
+{"id": "126896fc79c8", "kind": "fact", "payload": {"type": "intent", "text": "Player intent: attack", "ts": 6}, "status": "pending", "source_session": "session.jsonl", "ts": 6}
+{"id": "5ee912965362", "kind": "fact", "payload": {"type": "mode_transition", "text": "Mode changed combat -> combat", "ts": 7}, "status": "pending", "source_session": "session.jsonl", "ts": 7}
+{"id": "bf91b78d3b9c", "kind": "fact", "payload": {"type": "dice", "text": "Rolled d20=18", "ts": 8}, "status": "pending", "source_session": "session.jsonl", "ts": 8}
+{"id": "e677aaf2ea1e", "kind": "fact", "payload": {"type": "intent", "text": "Player intent: disengage", "ts": 10}, "status": "pending", "source_session": "session.jsonl", "ts": 10}
+{"id": "611cfcaddf8b", "kind": "fact", "payload": {"type": "mode_transition", "text": "Mode changed combat -> exploration", "ts": 12}, "status": "pending", "source_session": "session.jsonl", "ts": 12}
+{"id": "2b4d280797c8", "kind": "fact", "payload": {"type": "intent", "text": "Player intent: attack", "ts": 2}, "status": "pending", "source_session": "session.jsonl", "ts": 2}
+{"id": "489bd0902192", "kind": "fact", "payload": {"type": "mode_transition", "text": "Mode changed exploration -> combat", "ts": 3}, "status": "pending", "source_session": "session.jsonl", "ts": 3}
+{"id": "731a5e32e235", "kind": "fact", "payload": {"type": "entropy", "text": "Entropy source: drand", "ts": 4}, "status": "pending", "source_session": "session.jsonl", "ts": 4}
+{"id": "f26d69ede6dc", "kind": "fact", "payload": {"type": "dice", "text": "Rolled d20=5", "ts": 5}, "status": "approved", "source_session": "session.jsonl", "ts": 5}

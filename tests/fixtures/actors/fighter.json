@@ -1,0 +1,26 @@
+{
+  "actor_id": "pc.fighter.sample",
+  "name": "Sample Fighter",
+  "class_name": "fighter",
+  "species_name": "human",
+  "level": 3,
+  "proficiency_bonus": 2,
+  "abilities": {
+    "str": 16,
+    "dex": 12,
+    "con": 14,
+    "int": 8,
+    "wis": 10,
+    "cha": 10
+  },
+  "equipped_weapon_ids": ["w.longsword"],
+  "known_spell_ids": [],
+  "feature_ids": ["f.second_wind"],
+  "item_ids": [],
+  "spell_slots": {},
+  "resources": {
+    "second_wind_uses": 1
+  },
+  "armor_class": 16,
+  "hit_points": 28
+}

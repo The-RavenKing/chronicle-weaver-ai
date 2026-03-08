@@ -1,0 +1,12 @@
+{
+  "id": "f.second_wind",
+  "name": "Second Wind",
+  "kind": "feature",
+  "description": "Recover a burst of vitality once per combat.",
+  "tags": ["fighter", "recovery"],
+  "aliases": ["second wind ability"],
+  "feature_type": "surge",
+  "action_type": "bonus_action",
+  "usage_key": "second_wind_uses",
+  "effect_summary": "Regain hit points equal to 1d10 + fighter level."
+}

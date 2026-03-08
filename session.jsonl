@@ -1,0 +1,17 @@
+{"type": "player_input", "payload": {"text": "attack goblin"}, "ts": 1}
+{"type": "intent_resolved", "payload": {"intent": "attack", "mechanic": "combat_roll", "confidence": 0.95, "is_valid": true}, "ts": 2}
+{"type": "mode_transition", "payload": {"from_mode": "exploration", "to_mode": "combat"}, "ts": 3}
+{"type": "dice_roll", "payload": {"value": 15, "entropy": 2695567634, "accepted_entropy": 2695567634, "attempts": 1, "provider": "local_csprng"}, "ts": 4}
+{"type": "player_input", "payload": {"text": "attack goblin"}, "ts": 5}
+{"type": "intent_resolved", "payload": {"intent": "attack", "mechanic": "combat_roll", "confidence": 0.95, "is_valid": true}, "ts": 6}
+{"type": "mode_transition", "payload": {"from_mode": "combat", "to_mode": "combat"}, "ts": 7}
+{"type": "dice_roll", "payload": {"value": 18, "entropy": 1597538637, "accepted_entropy": 1597538637, "attempts": 1, "provider": "local_csprng"}, "ts": 8}
+{"type": "player_input", "payload": {"text": "flee"}, "ts": 9}
+{"type": "intent_resolved", "payload": {"intent": "disengage", "mechanic": "disengage", "confidence": 0.9, "is_valid": true}, "ts": 10}
+{"type": "combat_disengaged", "payload": {"intent": "disengage", "from_mode": "combat"}, "ts": 11}
+{"type": "mode_transition", "payload": {"from_mode": "combat", "to_mode": "exploration"}, "ts": 12}
+{"type": "player_input", "payload": {"text": "attack goblin"}, "ts": 1}
+{"type": "intent_resolved", "payload": {"intent": "attack", "mechanic": "combat_roll", "confidence": 0.95, "is_valid": true}, "ts": 2}
+{"type": "mode_transition", "payload": {"from_mode": "exploration", "to_mode": "combat"}, "ts": 3}
+{"type": "entropy_prefetched", "payload": {"round": 1, "initiative_order": ["player", "enemy"], "source": "drand", "drand_base_url": "https://api.drand.sh", "rounds_used": [5908932], "beacons": [{"round": 5908932, "randomness": "7e433e407da558e7c7b26699be4e5bf115d9683f4d4519eadbd4366e2b783596", "signature": "b4d6ac70789ac02c91bb1700d904af5bbfff792b772679e376707546bc121336273efd4002210047dd5cdd612a9373390e9f83865b58bf2ef827ab2df7059ab6de60311e249f895b3adce3270d2cbed3fcbfaae486b1a7db2d722f4f5c669b44"}], "values": [2118336064, 2107988199, 3350357657, 3192806385, 366569535, 1296374250, 3688117870, 729298326]}, "ts": 4}
+{"type": "dice_roll", "payload": {"value": 5, "entropy": 2118336064, "accepted_entropy": 2118336064, "attempts": 1, "provider": "prefetched_pool"}, "ts": 5}
