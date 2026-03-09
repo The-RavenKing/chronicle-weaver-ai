@@ -93,6 +93,7 @@ def build_user_prompt(request: NarrationRequest) -> str:
         "11. If damage is not resolved, do not invent HP loss or exact damage numbers.",
         "11b. If defeated=true, narration may describe the target falling or being incapacitated. Do not invent gore or additional mechanics.",
         "11c. If target_hp_after=0, do not describe the target continuing to fight.",
+        "11d. If healing_total is present, describe recovery or renewed vigor using only that exact number. Do not invent additional healing.",
         "12. If resolution includes a rejection reason, do not narrate success.",
         "13. You may only describe details supported by Action Result, Resolved Action, or Context Items.",
         "14. Do not invent setting details (lighting, weather, scenery); use neutral language when unknown.",
@@ -100,11 +101,13 @@ def build_user_prompt(request: NarrationRequest) -> str:
         "16. Encounter Context shows the current round and whose turn it is; you may reference it for immediacy.",
         "17. Active conditions are listed in the Conditions section; do not invent conditions not listed there.",
         "18. Never invent enemy reinforcements, terrain features, or lighting not present in context.",
+        "19. If roll_mode=disadvantage, you may allude to impaired movement or disorientation only if the causing condition is listed in Conditions. Do not invent conditions.",
         "",
         "Resolved Action:",
         *resolved_action_lines,
         "",
         *_target_outcome_section(action),
+        *_healing_outcome_section(action),
         *_scene_section(request.scene),
         *_encounter_context_section(request.encounter_context),
         *_conditions_section(request.encounter_context),
@@ -309,6 +312,26 @@ def _target_outcome_section(action: ActionResult) -> list[str]:
     return ["Target Outcome:", *lines, ""]
 
 
+def _healing_outcome_section(action: ActionResult) -> list[str]:
+    """Return 'Healing Outcome:' section lines when healing fields are present."""
+    payload = action.resolved_action
+    if not payload:
+        return []
+    outcome_keys = (
+        "healing_total",
+        "self_hp_before",
+        "self_hp_after",
+    )
+    lines: list[str] = []
+    for key in outcome_keys:
+        value = payload.get(key)
+        if value is not None:
+            lines.append(f"{key}: {_prompt_value(value)}")
+    if not lines:
+        return []
+    return ["Healing Outcome:", *lines, ""]
+
+
 def _scene_section(scene: SceneState | None) -> list[str]:
     """Return 'Scene:' section lines when a SceneState is provided."""
     if scene is None:
@@ -366,6 +389,8 @@ def _resolved_action_lines(action: ActionResult) -> list[str]:
         "explanation",
         "attacker_name",
         "target_name",
+        "roll_mode",
+        "attack_rolls_d20",
         "attack_roll_d20",
         "attack_bonus_total",
         "attack_total",
@@ -378,6 +403,12 @@ def _resolved_action_lines(action: ActionResult) -> list[str]:
         "target_hp_before",
         "target_hp_after",
         "defeated",
+        "healing_formula",
+        "healing_rolls",
+        "healing_modifier_total",
+        "healing_total",
+        "self_hp_before",
+        "self_hp_after",
         "auto_hit",
         "effect_summary",
         "remaining_uses",

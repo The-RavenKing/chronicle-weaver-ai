@@ -88,6 +88,7 @@ def actor_to_dict(actor: Actor) -> dict[str, Any]:
         "resources": dict(actor.resources),
         "armor_class": actor.armor_class,
         "hit_points": actor.hit_points,
+        "max_hit_points": actor.max_hit_points,
     }
 
 
@@ -111,6 +112,7 @@ def actor_from_dict(d: dict[str, Any]) -> Actor:
         resources=dict(d.get("resources") or {}),
         armor_class=d.get("armor_class"),
         hit_points=d.get("hit_points"),
+        max_hit_points=d.get("max_hit_points"),
     )
 
 

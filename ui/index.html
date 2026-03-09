@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chronicle Weaver</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0d0d1a;
+      color: #c0c0d0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    #header {
+      background: #12122a;
+      border-bottom: 1px solid #2a2a5a;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    #header h1 { font-size: 1em; color: #8080d0; letter-spacing: 2px; }
+    #mode-badge {
+      font-size: 0.75em;
+      padding: 2px 8px;
+      border-radius: 3px;
+      background: #1a1a4a;
+      color: #a0a0e0;
+      border: 1px solid #3a3a7a;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    #mode-badge.combat { background: #3a1010; color: #e08080; border-color: #7a2020; }
+
+    /* ── Main area ───────────────────────────────────────────── */
+    #main {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── Output (narration log) ──────────────────────────────── */
+    #output {
+      flex: 2;
+      overflow-y: auto;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border-right: 1px solid #1e1e40;
+    }
+    .player-cmd {
+      color: #5070a0;
+      font-size: 0.88em;
+      padding-top: 10px;
+    }
+    .intent-line {
+      font-size: 0.78em;
+      color: #5a8a5a;
+      padding-left: 6px;
+    }
+    .narration-block {
+      border-left: 3px solid #3a3a7a;
+      padding: 8px 10px;
+      color: #c8b880;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      font-size: 0.9em;
+    }
+    .narration-label {
+      font-size: 0.7em;
+      color: #5050a0;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .warn-line { font-size: 0.78em; color: #a06030; padding-left: 6px; }
+    .err-line  { font-size: 0.78em; color: #c04040; padding-left: 6px; }
+
+    /* ── Sidebar ─────────────────────────────────────────────── */
+    #sidebar {
+      flex: 1;
+      min-width: 220px;
+      max-width: 300px;
+      overflow-y: auto;
+      background: #0f0f20;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .panel { display: flex; flex-direction: column; gap: 3px; }
+    .panel-title {
+      font-size: 0.7em;
+      color: #5a5a9a;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid #1e1e40;
+      padding-bottom: 3px;
+      margin-bottom: 2px;
+    }
+    .kv {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8em;
+      gap: 6px;
+    }
+    .kv .k { color: #6070a0; flex-shrink: 0; }
+    .kv .v { color: #d0c080; text-align: right; word-break: break-all; }
+    .sub-title {
+      font-size: 0.68em;
+      color: #444470;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 4px;
+    }
+    .turn-entry {
+      font-size: 0.78em;
+      padding: 2px 4px;
+      border-radius: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .turn-entry.active {
+      background: #1e1e50;
+      color: #c0c0ff;
+    }
+    .economy-row {
+      font-size: 0.8em;
+      display: flex;
+      gap: 4px;
+    }
+    .token {
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 0.75em;
+      background: #1a2a1a;
+      color: #60a060;
+      border: 1px solid #2a5a2a;
+    }
+    .token.used {
+      background: #1a1a1a;
+      color: #404040;
+      border-color: #303030;
+    }
+    .dim { color: #383858; font-style: italic; font-size: 0.8em; }
+
+    /* ── Input bar ───────────────────────────────────────────── */
+    #input-bar {
+      background: #12122a;
+      border-top: 1px solid #2a2a5a;
+      padding: 8px 12px;
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    #player-input {
+      flex: 1;
+      background: #0a0a18;
+      color: #d0d0e0;
+      border: 1px solid #2a2a5a;
+      padding: 7px 10px;
+      font-family: inherit;
+      font-size: 0.9em;
+      border-radius: 3px;
+      outline: none;
+    }
+    #player-input:focus { border-color: #4a4aaa; }
+    button {
+      background: #1e1e50;
+      color: #8080d0;
+      border: 1px solid #3a3a8a;
+      padding: 7px 14px;
+      font-family: inherit;
+      font-size: 0.85em;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    button:hover { background: #2a2a6a; color: #b0b0ff; }
+    #demo-btn { color: #608060; border-color: #2a4a2a; background: #101a10; }
+    #demo-btn:hover { background: #1a2a1a; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>⚔ CHRONICLE WEAVER</h1>
+  <span id="mode-badge">exploration</span>
+</div>
+
+<div id="main">
+  <div id="output">
+    <div id="narration-log"></div>
+  </div>
+
+  <div id="sidebar">
+    <!-- Actor sheet -->
+    <div class="panel" id="actor-panel-wrap">
+      <div class="panel-title">Actor Sheet</div>
+      <div id="actor-panel"><span class="dim">No actor — click Load Demo</span></div>
+    </div>
+
+    <!-- Encounter order -->
+    <div class="panel" id="encounter-panel-wrap">
+      <div class="panel-title">Encounter Order</div>
+      <div id="encounter-panel"><span class="dim">No encounter</span></div>
+    </div>
+
+    <!-- Last resolution -->
+    <div class="panel" id="resolution-panel-wrap">
+      <div class="panel-title">Last Resolution</div>
+      <div id="resolution-panel"><span class="dim">None</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="input-bar">
+  <input id="player-input" type="text" placeholder="What do you do?" autocomplete="off" />
+  <button id="submit-btn">Submit</button>
+  <button id="demo-btn">Load Demo</button>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

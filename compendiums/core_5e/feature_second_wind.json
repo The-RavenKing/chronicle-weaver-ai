@@ -8,5 +8,7 @@
   "feature_type": "surge",
   "action_type": "bonus_action",
   "usage_key": "second_wind_uses",
-  "effect_summary": "Regain hit points equal to 1d10 + fighter level."
+  "effect_summary": "Regain hit points equal to 1d10 + fighter level.",
+  "healing_formula": "1d10",
+  "healing_level_bonus": true
 }

@@ -308,6 +308,12 @@ def _parse_entry(raw: dict[str, JSONValue], path: Path) -> CompendiumEntry:
                 path,
                 default=description,
             ),
+            healing_formula=_as_optional_str(
+                raw.get("healing_formula"), "healing_formula", path
+            ),
+            healing_level_bonus=_as_bool(
+                raw.get("healing_level_bonus", False), "healing_level_bonus", path
+            ),
         )
     if kind == "monster":
         return MonsterEntry(

@@ -45,6 +45,7 @@ class CombatantSnapshot:
     source_id: str
     armor_class: int | None
     hit_points: int | None
+    max_hit_points: int | None = None
     abilities: dict[str, int] = field(default_factory=dict)
     resources: dict[str, int] = field(default_factory=dict)
     proficiency_bonus: int | None = None
@@ -68,6 +69,7 @@ def combatant_from_actor(actor: Actor) -> CombatantSnapshot:
         source_id=actor.actor_id,
         armor_class=actor.armor_class,
         hit_points=actor.hit_points,
+        max_hit_points=actor.max_hit_points,
         abilities=dict(actor.abilities),
         resources=dict(actor.resources),
         proficiency_bonus=actor.proficiency_bonus,
@@ -83,6 +85,24 @@ def apply_damage(target: CombatantSnapshot, damage_total: int) -> CombatantSnaps
     if target.hit_points is None:
         return target
     new_hp = max(0, target.hit_points - damage_total)
+    return replace(target, hit_points=new_hp)
+
+
+def apply_healing(
+    target: CombatantSnapshot,
+    healing_amount: int,
+) -> CombatantSnapshot:
+    """Return updated snapshot with healing applied; hit_points caps at max_hit_points.
+
+    If hit_points is None (unknown), the snapshot is returned unchanged.
+    healing_amount is floored at zero so negative values are treated as no-ops.
+    """
+    if target.hit_points is None:
+        return target
+    amount = max(0, healing_amount)
+    new_hp = target.hit_points + amount
+    if target.max_hit_points is not None:
+        new_hp = min(new_hp, target.max_hit_points)
     return replace(target, hit_points=new_hp)
 
 

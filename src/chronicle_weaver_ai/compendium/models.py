@@ -69,6 +69,8 @@ class FeatureEntry(CompendiumEntry):
     action_type: str = "action"
     usage_key: str | None = None
     effect_summary: str = ""
+    healing_formula: str | None = None
+    healing_level_bonus: bool = False
 
 
 @dataclass(frozen=True)

@@ -1,10 +1,19 @@
-"""Condition helpers: add, remove, tick durations, and render on CombatantSnapshot."""
+"""Condition helpers: add, remove, tick durations, render, and mechanic queries."""
 
 from __future__ import annotations
 
 import dataclasses
+from typing import Literal
 
 from chronicle_weaver_ai.rules.combatant import Condition, CombatantSnapshot
+
+RollMode = Literal["normal", "disadvantage"]
+
+# Conditions that prevent the combatant from taking any action/bonus/reaction.
+_BLOCKING_CONDITIONS: frozenset[str] = frozenset({"stunned"})
+
+# Conditions that impose disadvantage on the combatant's own attack rolls.
+_DISADVANTAGE_CONDITIONS: frozenset[str] = frozenset({"poisoned", "prone"})
 
 
 def add_condition(
@@ -53,6 +62,33 @@ def tick_condition_durations(snapshot: CombatantSnapshot) -> CombatantSnapshot:
             # "instant" and "persistent" are not modified by ticking
             updated.append(condition)
     return dataclasses.replace(snapshot, conditions=tuple(updated))
+
+
+def is_blocked_by_conditions(snapshot: CombatantSnapshot) -> str | None:
+    """Return a rejection reason string if any condition blocks all actions, else None.
+
+    A combatant is blocked when it carries a condition in _BLOCKING_CONDITIONS
+    (currently only 'stunned').  The returned string is suitable for display as
+    a resolution rejection reason.
+    """
+    for condition in snapshot.conditions:
+        if condition.condition_name in _BLOCKING_CONDITIONS:
+            return f"combatant is {condition.condition_name} and cannot act"
+    return None
+
+
+def attack_roll_mode(snapshot: CombatantSnapshot) -> RollMode:
+    """Return the roll mode that applies to this combatant's own attack rolls.
+
+    Returns 'disadvantage' if the combatant has any condition in
+    _DISADVANTAGE_CONDITIONS (poisoned or prone), otherwise 'normal'.
+    Only one roll mode is returned; if multiple disadvantage sources are
+    present the result is still 'disadvantage' (no stacking).
+    """
+    active_names = {c.condition_name for c in snapshot.conditions}
+    if active_names & _DISADVANTAGE_CONDITIONS:
+        return "disadvantage"
+    return "normal"
 
 
 def render_condition(condition: Condition) -> str:

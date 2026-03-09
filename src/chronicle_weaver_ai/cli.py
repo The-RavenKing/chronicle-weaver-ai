@@ -63,8 +63,10 @@ from chronicle_weaver_ai.retrieval.lexical import Doc, retrieve
 from chronicle_weaver_ai.rules import (
     CombatantSnapshot,
     apply_damage,
+    attack_roll_mode,
     combatant_from_actor,
     combatant_from_monster_entry,
+    is_blocked_by_conditions,
     resolve_feature_use,
     resolve_spell_cast,
     resolve_weapon_attack,
@@ -544,7 +546,15 @@ def _process_turn_with_resolution(
             output=output,
             dice_provider=engine.dice_provider,
             target_combatant=target_combatant,
+            attacker_combatant=attacker_combatant,
         )
+        if actor is not None and compendium_store is not None:
+            _enrich_feature_use_with_healing(
+                payload=resolved_payload,
+                actor=actor,
+                dice_provider=engine.dice_provider,
+                compendium_store=compendium_store,
+            )
     all_events = list(output.events)
     if resolved_payload is not None:
         resolved_event = Event(
@@ -584,6 +594,20 @@ def _resolve_compendium_backed_action(
     turn_budget: TurnBudget | None,
     attacker_combatant: CombatantSnapshot | None = None,
 ) -> tuple[IntentResult, dict[str, JSONValue], str | None]:
+    # Condition guard: stunned combatants cannot take any action.
+    if attacker_combatant is not None:
+        block_reason = is_blocked_by_conditions(attacker_combatant)
+        if block_reason is not None:
+            return (
+                _reject_interpreted_action(interpreted, block_reason),
+                {
+                    "action_kind": interpreted.intent.value,
+                    "entry_id": interpreted.entry_id,
+                    "reason": block_reason,
+                },
+                block_reason,
+            )
+
     if interpreted.entry_id is None:
         raise ValueError("entry_id is required for compendium-backed action resolution")
 
@@ -746,12 +770,23 @@ def _apply_actor_resource_spend(
     if action_kind == "use_feature":
         can_use = resolved_payload.get("can_use")
         usage_key = resolved_payload.get("usage_key")
+        updated = actor
         if can_use is True and isinstance(usage_key, str):
-            resources = dict(actor.resources)
+            resources = dict(updated.resources)
             current = resources.get(usage_key, 0)
             resources[usage_key] = max(0, current - 1)
-            return replace(actor, resources=resources)
-        return actor
+            updated = replace(updated, resources=resources)
+        healing_total = resolved_payload.get("healing_total")
+        if (
+            can_use is True
+            and isinstance(healing_total, int)
+            and updated.hit_points is not None
+        ):
+            new_hp = updated.hit_points + healing_total
+            if updated.max_hit_points is not None:
+                new_hp = min(new_hp, updated.max_hit_points)
+            updated = replace(updated, hit_points=new_hp)
+        return updated
 
     return actor
 
@@ -761,6 +796,7 @@ def _enrich_weapon_attack_resolution_with_roll(
     output: EngineOutput,
     dice_provider: DiceProvider,
     target_combatant: CombatantSnapshot | None = None,
+    attacker_combatant: CombatantSnapshot | None = None,
 ) -> None:
     action_kind = payload.get("action_kind")
     if action_kind != "attack":
@@ -770,7 +806,26 @@ def _enrich_weapon_attack_resolution_with_roll(
     attack_bonus_total = payload.get("attack_bonus_total")
     if not isinstance(attack_bonus_total, int):
         return
-    attack_roll_d20 = output.dice_roll.value
+
+    # Determine roll mode from attacker conditions (poisoned or prone → disadvantage).
+    roll_mode = (
+        attack_roll_mode(attacker_combatant)
+        if attacker_combatant is not None
+        else "normal"
+    )
+
+    first_roll = output.dice_roll.value
+    if roll_mode == "disadvantage":
+        # Roll a second d20; take the lower of the two.
+        second_record = roll_d20_record(dice_provider)
+        second_roll = second_record.value
+        attack_roll_d20 = min(first_roll, second_roll)
+        payload["attack_rolls_d20"] = [first_roll, second_roll]
+    else:
+        attack_roll_d20 = first_roll
+        payload["attack_rolls_d20"] = [first_roll]
+
+    payload["roll_mode"] = roll_mode
     attack_total = attack_roll_d20 + attack_bonus_total
 
     if target_combatant is not None and target_combatant.armor_class is not None:
@@ -807,6 +862,52 @@ def _enrich_weapon_attack_resolution_with_roll(
                     payload["target_hp_before"] = hp_before
                     payload["target_hp_after"] = hp_after
                     payload["defeated"] = hp_after == 0
+
+
+def _enrich_feature_use_with_healing(
+    payload: dict[str, JSONValue],
+    actor: Actor,
+    dice_provider: DiceProvider,
+    compendium_store: CompendiumStore,
+) -> None:
+    """Roll and record healing for features that have a healing_formula.
+
+    Mutates *payload* in place with healing fields.  Called only when the feature
+    use was accepted (can_use=True) and the entry has healing_formula set.
+    """
+    if payload.get("action_kind") != "use_feature":
+        return
+    if payload.get("can_use") is not True:
+        return
+    entry_id = payload.get("entry_id")
+    if not isinstance(entry_id, str):
+        return
+    entry = compendium_store.get_by_id(entry_id)
+    if not isinstance(entry, FeatureEntry):
+        return
+    if not entry.healing_formula:
+        return
+
+    # Build the effective formula, optionally appending actor level
+    effective_formula = entry.healing_formula
+    if entry.healing_level_bonus and actor.level > 0:
+        effective_formula = f"{effective_formula} +{actor.level}"
+
+    dmg = roll_damage_formula(effective_formula, dice_provider)
+    healing_total = max(0, dmg.damage_total)
+
+    payload["healing_formula"] = effective_formula
+    payload["healing_rolls"] = dmg.damage_rolls
+    payload["healing_modifier_total"] = dmg.damage_modifier_total
+    payload["healing_total"] = healing_total
+
+    if actor.hit_points is not None:
+        hp_before = actor.hit_points
+        new_hp = hp_before + healing_total
+        if actor.max_hit_points is not None:
+            new_hp = min(new_hp, actor.max_hit_points)
+        payload["self_hp_before"] = hp_before
+        payload["self_hp_after"] = new_hp
 
 
 def _next_timestamp(events: list[Event], fallback: int) -> int:
@@ -1713,6 +1814,7 @@ def _default_demo_actor() -> Actor:
         resources={"second_wind_uses": 1},
         armor_class=16,
         hit_points=24,
+        max_hit_points=28,
     )
 
 
@@ -1746,6 +1848,9 @@ def _parse_actor_payload(raw: object, source: str) -> Actor:
     resources = _actor_str_key_mapping(raw.get("resources", {}), source, "resources")
     armor_class = _actor_optional_int(raw.get("armor_class"), source, "armor_class")
     hit_points = _actor_optional_int(raw.get("hit_points"), source, "hit_points")
+    max_hit_points = _actor_optional_int(
+        raw.get("max_hit_points"), source, "max_hit_points"
+    )
     return Actor(
         actor_id=actor_id,
         name=name,
@@ -1762,6 +1867,7 @@ def _parse_actor_payload(raw: object, source: str) -> Actor:
         resources=resources,
         armor_class=armor_class,
         hit_points=hit_points,
+        max_hit_points=max_hit_points,
     )
 
 

@@ -94,6 +94,7 @@ class Actor:
     resources: dict[str, int] = field(default_factory=dict)
     armor_class: int | None = None
     hit_points: int | None = None
+    max_hit_points: int | None = None
 
 
 def ability_modifier(score: int) -> int:
