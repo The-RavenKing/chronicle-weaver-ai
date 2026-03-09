@@ -15,6 +15,7 @@ from .models import (
     EntryKind,
     FeatureEntry,
     ItemEntry,
+    MonsterAction,
     MonsterEntry,
     SpellEntry,
     WeaponEntry,
@@ -327,6 +328,12 @@ def _parse_entry(raw: dict[str, JSONValue], path: Path) -> CompendiumEntry:
             hit_points=_as_optional_int(
                 raw.get("hit_points"), "hit_points", path, default=None
             ),
+            speed=_as_int(raw.get("speed"), "speed", path, default=0),
+            abilities=_as_int_dict(raw.get("abilities"), "abilities", path, default={}),
+            actions=_as_monster_actions(raw.get("actions"), "actions", path),
+            challenge_rating=_as_optional_str(
+                raw.get("challenge_rating"), "challenge_rating", path, default=None
+            ),
         )
     raise CompendiumLoadError(
         str(path),
@@ -439,6 +446,66 @@ def _as_bool(
     if isinstance(value, bool):
         return value
     raise CompendiumLoadError(str(path), f"invalid '{field_name}', expected bool")
+
+
+def _as_int_dict(
+    value: object,
+    field_name: str,
+    path: Path,
+    *,
+    default: dict[str, int] | None = None,
+) -> dict[str, int]:
+    if value is None:
+        if default is not None:
+            return dict(default)
+        raise CompendiumLoadError(str(path), f"missing required field '{field_name}'")
+    if not isinstance(value, dict):
+        raise CompendiumLoadError(str(path), f"invalid '{field_name}', expected object")
+    result: dict[str, int] = {}
+    for k, v in value.items():
+        if not isinstance(k, str):
+            raise CompendiumLoadError(str(path), f"'{field_name}' keys must be strings")
+        if isinstance(v, bool) or not isinstance(v, int):
+            raise CompendiumLoadError(
+                str(path), f"'{field_name}' values must be integers"
+            )
+        result[k] = v
+    return result
+
+
+def _parse_monster_action(raw: object, path: Path) -> MonsterAction:
+    if not isinstance(raw, dict):
+        raise CompendiumLoadError(str(path), "monster action must be an object")
+    name = _as_str(raw.get("name"), "actions.name", path)
+    attack_bonus = _as_int(
+        raw.get("attack_bonus"), "actions.attack_bonus", path, default=0
+    )
+    damage_formula = _as_str(
+        raw.get("damage_formula"), "actions.damage_formula", path, default=""
+    )
+    target_count = _as_int(
+        raw.get("target_count"), "actions.target_count", path, default=1
+    )
+    damage_type = _as_str(
+        raw.get("damage_type"), "actions.damage_type", path, default=""
+    )
+    return MonsterAction(
+        name=name,
+        attack_bonus=attack_bonus,
+        damage_formula=damage_formula,
+        target_count=target_count,
+        damage_type=damage_type,
+    )
+
+
+def _as_monster_actions(
+    value: object, field_name: str, path: Path
+) -> list[MonsterAction]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise CompendiumLoadError(str(path), f"invalid '{field_name}', expected list")
+    return [_parse_monster_action(item, path) for item in value]
 
 
 def _location(path: Path, index: int | None) -> str:

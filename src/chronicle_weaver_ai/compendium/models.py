@@ -72,6 +72,17 @@ class FeatureEntry(CompendiumEntry):
 
 
 @dataclass(frozen=True)
+class MonsterAction:
+    """A single action available to a monster (weapon-like attack for now)."""
+
+    name: str
+    attack_bonus: int
+    damage_formula: str
+    target_count: int = 1
+    damage_type: str = ""
+
+
+@dataclass(frozen=True)
 class MonsterEntry(CompendiumEntry):
     """Monster-specific compendium entry."""
 
@@ -79,6 +90,10 @@ class MonsterEntry(CompendiumEntry):
     creature_type: str = ""
     armor_class: int | None = None
     hit_points: int | None = None
+    speed: int = 0
+    abilities: dict[str, int] = field(default_factory=dict)
+    actions: list[MonsterAction] = field(default_factory=list)
+    challenge_rating: str | None = None
 
 
 __all__ = [
@@ -87,6 +102,7 @@ __all__ = [
     "SpellEntry",
     "ItemEntry",
     "FeatureEntry",
+    "MonsterAction",
     "MonsterEntry",
     "EntryKind",
 ]

@@ -14,6 +14,8 @@ from chronicle_weaver_ai.dice import (
     FixedEntropyDiceProvider,
     LocalCSPRNGDiceProvider,
     SeededDiceProvider,
+    roll_damage_formula,
+    roll_d20_record,
 )
 from chronicle_weaver_ai.engine import Engine, reduce_state
 from chronicle_weaver_ai.event_store import InMemoryEventStore
@@ -59,13 +61,29 @@ from chronicle_weaver_ai.narration.narrator import (
 )
 from chronicle_weaver_ai.retrieval.lexical import Doc, retrieve
 from chronicle_weaver_ai.rules import (
+    CombatantSnapshot,
+    apply_damage,
+    combatant_from_actor,
+    combatant_from_monster_entry,
     resolve_feature_use,
     resolve_spell_cast,
     resolve_weapon_attack,
 )
+from chronicle_weaver_ai.compendium.models import MonsterEntry
+from chronicle_weaver_ai.encounter import (
+    EncounterState,
+    create_encounter,
+    current_combatant,
+    end_turn,
+    is_encounter_over,
+    mark_defeated,
+    update_combatant,
+)
 from chronicle_weaver_ai.scribe.scribe import run_lore_scribe
 
 app = typer.Typer(add_completion=False, help="Chronicle Weaver deterministic CLI.")
+
+DEFAULT_ENEMY_AC = 13
 
 _compendium_store_cache: CompendiumStore | None = None
 
@@ -147,6 +165,14 @@ def demo(
         "--show-resolution/--hide-resolution",
         help="Print structured resolved action payload before narration/output.",
     ),
+    spawn: str | None = typer.Option(
+        None,
+        "--spawn",
+        help=(
+            "Spawn a named monster and run a full deterministic encounter "
+            "(e.g. --spawn goblin). Uses --seed / --fixed-entropy for dice."
+        ),
+    ),
 ) -> None:
     """Run one deterministic vertical-slice turn."""
     if seed is not None and fixed_entropy is not None:
@@ -197,6 +223,21 @@ def demo(
     )
     actor_state = {"actor": _load_demo_actor(actor)}
     state = GameState()
+
+    if spawn is not None:
+        if compendium_store is None:
+            typer.echo(
+                "spawn error: no compendium loaded; use --compendium-root", err=True
+            )
+            raise typer.Exit(code=1)
+        _run_spawn_encounter(
+            compendium_store=compendium_store,
+            spawn=spawn,
+            actor=actor_state["actor"],
+            dice_provider=provider,
+        )
+        return
+
     if replay is not None:
         loaded_events, replayed_state = _load_and_replay(
             event_store, replay, "--replay"
@@ -302,6 +343,9 @@ def _print_turn(
         typer.echo(f"resolution {json.dumps(resolved_payload, sort_keys=True)}")
     if resolution_rejection_reason is not None:
         typer.echo(f"resolution rejected: {resolution_rejection_reason}")
+        if add_trailing_blank_line:
+            typer.echo()
+        return new_state
 
     typer.echo(f"intent={output.intent.value} mechanic={output.mechanic.value}")
     if output.dice_roll is not None:
@@ -330,10 +374,7 @@ def _print_turn(
             f"entropy_source={new_state.combat.entropy_source or 'unknown'}"
             f"{fallback_suffix}"
         )
-    if resolution_rejection_reason is None:
-        typer.echo(f"narrative {output.narrative}")
-    else:
-        typer.echo(f"narrative skipped ({resolution_rejection_reason}).")
+    typer.echo(f"narrative {output.narrative}")
     if add_trailing_blank_line:
         typer.echo()
     return new_state
@@ -463,6 +504,14 @@ def _process_turn_with_resolution(
     resolved_payload: dict[str, JSONValue] | None = None
     resolution_rejection_reason: str | None = None
 
+    attacker_combatant: CombatantSnapshot | None = (
+        combatant_from_actor(actor) if actor is not None else None
+    )
+    target_combatant: CombatantSnapshot | None = _resolve_target_combatant(
+        target=interpreted.target,
+        compendium_store=compendium_store,
+    )
+
     if (
         interpreted.entry_id is not None
         and compendium_store is not None
@@ -477,6 +526,7 @@ def _process_turn_with_resolution(
             actor=actor,
             compendium_store=compendium_store,
             turn_budget=state.combat.turn_budget if state.combat is not None else None,
+            attacker_combatant=attacker_combatant,
         )
 
     new_state, output = engine.process_input(
@@ -492,6 +542,8 @@ def _process_turn_with_resolution(
         _enrich_weapon_attack_resolution_with_roll(
             payload=resolved_payload,
             output=output,
+            dice_provider=engine.dice_provider,
+            target_combatant=target_combatant,
         )
     all_events = list(output.events)
     if resolved_payload is not None:
@@ -530,6 +582,7 @@ def _resolve_compendium_backed_action(
     actor: Actor,
     compendium_store: CompendiumStore,
     turn_budget: TurnBudget | None,
+    attacker_combatant: CombatantSnapshot | None = None,
 ) -> tuple[IntentResult, dict[str, JSONValue], str | None]:
     if interpreted.entry_id is None:
         raise ValueError("entry_id is required for compendium-backed action resolution")
@@ -564,6 +617,9 @@ def _resolve_compendium_backed_action(
             "action_available": weapon_resolved.action_available,
             "explanation": weapon_resolved.explanation,
         }
+        if attacker_combatant is not None:
+            payload["attacker_combatant_id"] = attacker_combatant.combatant_id
+            payload["attacker_name"] = attacker_combatant.display_name
         weapon_reason: str | None = None
         if not weapon_resolved.action_available:
             weapon_reason = f"turn budget does not allow {weapon_resolved.action_cost}"
@@ -645,6 +701,20 @@ def _resolve_compendium_backed_action(
     )
 
 
+def _resolve_target_combatant(
+    target: str | None,
+    compendium_store: CompendiumStore | None,
+) -> CombatantSnapshot | None:
+    """Look up a monster entry by target name and return a CombatantSnapshot."""
+    if target is None or compendium_store is None:
+        return None
+    matches = compendium_store.find_by_name(target)
+    monster = next((e for e in matches if isinstance(e, MonsterEntry)), None)
+    if monster is None:
+        return None
+    return combatant_from_monster_entry(monster)
+
+
 def _reject_interpreted_action(interpreted: IntentResult, reason: str) -> IntentResult:
     return replace(
         interpreted,
@@ -689,6 +759,8 @@ def _apply_actor_resource_spend(
 def _enrich_weapon_attack_resolution_with_roll(
     payload: dict[str, JSONValue],
     output: EngineOutput,
+    dice_provider: DiceProvider,
+    target_combatant: CombatantSnapshot | None = None,
 ) -> None:
     action_kind = payload.get("action_kind")
     if action_kind != "attack":
@@ -699,8 +771,42 @@ def _enrich_weapon_attack_resolution_with_roll(
     if not isinstance(attack_bonus_total, int):
         return
     attack_roll_d20 = output.dice_roll.value
+    attack_total = attack_roll_d20 + attack_bonus_total
+
+    if target_combatant is not None and target_combatant.armor_class is not None:
+        target_armor_class = target_combatant.armor_class
+    else:
+        target_armor_class = DEFAULT_ENEMY_AC
+
+    hit_result = attack_total >= target_armor_class
+
     payload["attack_roll_d20"] = attack_roll_d20
-    payload["attack_total"] = attack_roll_d20 + attack_bonus_total
+    payload["attack_total"] = attack_total
+    payload["target_armor_class"] = target_armor_class
+    payload["hit_result"] = hit_result
+
+    if target_combatant is not None:
+        payload["target_combatant_id"] = target_combatant.combatant_id
+        payload["target_name"] = target_combatant.display_name
+
+    if hit_result:
+        damage_formula = payload.get("damage_formula")
+        if isinstance(damage_formula, str) and damage_formula:
+            dmg = roll_damage_formula(damage_formula, dice_provider)
+            payload["damage_rolls"] = dmg.damage_rolls
+            payload["damage_modifier_total"] = dmg.damage_modifier_total
+            payload["damage_total"] = dmg.damage_total
+
+            if target_combatant is not None and isinstance(
+                target_combatant.hit_points, int
+            ):
+                hp_before = target_combatant.hit_points
+                updated = apply_damage(target_combatant, dmg.damage_total)
+                hp_after = updated.hit_points
+                if isinstance(hp_after, int):
+                    payload["target_hp_before"] = hp_before
+                    payload["target_hp_after"] = hp_after
+                    payload["defeated"] = hp_after == 0
 
 
 def _next_timestamp(events: list[Event], fallback: int) -> int:
@@ -777,6 +883,189 @@ def _load_and_replay(
         raise typer.Exit(code=1) from exc
     replayed_state = event_store.replay(GameState(), reduce_state)
     return loaded_events, replayed_state
+
+
+# ── Spawn encounter helpers ────────────────────────────────────────────────────
+
+_SPAWN_ROUNDS_MAX = 20
+
+
+def _run_spawn_encounter(
+    compendium_store: CompendiumStore,
+    spawn: str,
+    actor: Actor,
+    dice_provider: DiceProvider,
+) -> None:
+    """Run a deterministic player-vs-monster encounter to completion and print results."""
+    # Resolve monster entry by name
+    matches = compendium_store.find_by_name(spawn)
+    monster_entry = next((e for e in matches if isinstance(e, MonsterEntry)), None)
+    if monster_entry is None:
+        typer.echo(f"spawn error: monster '{spawn}' not found in compendium", err=True)
+        raise typer.Exit(code=1)
+
+    player_snap = combatant_from_actor(actor)
+    monster_snap = combatant_from_monster_entry(monster_entry)
+
+    encounter = create_encounter(
+        "enc.spawn", [player_snap, monster_snap], dice_provider
+    )
+
+    typer.echo(f"=== Encounter: {actor.name} vs {monster_entry.name} ===")
+    typer.echo(f"Initiative order: {', '.join(encounter.turn_order.combatant_ids)}")
+    typer.echo()
+
+    for _ in range(_SPAWN_ROUNDS_MAX):
+        if is_encounter_over(encounter):
+            break
+
+        active_id = current_combatant(encounter.turn_order)
+        active = encounter.combatants[active_id]
+
+        typer.echo(
+            f"--- Round {encounter.turn_order.current_round}, "
+            f"turn: {active.display_name} ---"
+        )
+
+        if active.source_type == "actor":
+            encounter = _do_player_ai_turn(
+                encounter=encounter,
+                actor=actor,
+                compendium_store=compendium_store,
+                dice_provider=dice_provider,
+            )
+        else:
+            encounter = _do_monster_ai_turn(
+                encounter=encounter,
+                monster_snap=active,
+                monster_entry=monster_entry,
+                dice_provider=dice_provider,
+            )
+
+        # Print current HP after the turn
+        for cid, snap in encounter.combatants.items():
+            status = (
+                "defeated" if cid in encounter.defeated_ids else f"HP={snap.hit_points}"
+            )
+            typer.echo(f"  {snap.display_name}: {status}")
+        typer.echo()
+
+        if is_encounter_over(encounter):
+            break
+
+        encounter = end_turn(encounter)
+
+    # Outcome
+    actor_ids = [
+        cid for cid, snap in encounter.combatants.items() if snap.source_type == "actor"
+    ]
+    monster_ids = [
+        cid
+        for cid, snap in encounter.combatants.items()
+        if snap.source_type == "monster"
+    ]
+    if all(cid in encounter.defeated_ids for cid in monster_ids):
+        typer.echo(f"Victory! {actor.name} has defeated {monster_entry.name}.")
+    elif all(cid in encounter.defeated_ids for cid in actor_ids):
+        typer.echo(f"Defeat! {actor.name} was defeated by {monster_entry.name}.")
+    else:
+        typer.echo(
+            f"Encounter ended after {_SPAWN_ROUNDS_MAX} rounds (no decisive outcome)."
+        )
+
+
+def _do_player_ai_turn(
+    encounter: EncounterState,
+    actor: Actor,
+    compendium_store: CompendiumStore,
+    dice_provider: DiceProvider,
+) -> EncounterState:
+    """Execute a simple AI player turn: attack the first living monster with equipped weapon."""
+    weapon_id = actor.equipped_weapon_ids[0] if actor.equipped_weapon_ids else None
+    if weapon_id is None:
+        typer.echo(f"  {actor.name} has no equipped weapon — skips turn.")
+        return encounter
+
+    weapon_entry = compendium_store.get_by_id(weapon_id)
+    if not isinstance(weapon_entry, WeaponEntry):
+        typer.echo(
+            f"  {actor.name}: weapon entry '{weapon_id}' not found — skips turn."
+        )
+        return encounter
+
+    resolved = resolve_weapon_attack(actor, weapon_entry)
+
+    target_id = next(
+        (
+            cid
+            for cid, snap in encounter.combatants.items()
+            if snap.source_type == "monster" and cid not in encounter.defeated_ids
+        ),
+        None,
+    )
+    if target_id is None:
+        return encounter
+
+    target = encounter.combatants[target_id]
+    attack_record = roll_d20_record(dice_provider)
+    attack_total = attack_record.value + resolved.attack_bonus_total
+
+    typer.echo(
+        f"  {actor.name} attacks {target.display_name} with {weapon_entry.name} — "
+        f"d20={attack_record.value}+{resolved.attack_bonus_total}={attack_total} "
+        f"vs AC {target.armor_class}"
+    )
+
+    if target.armor_class is not None and attack_total >= target.armor_class:
+        dmg = roll_damage_formula(resolved.damage_formula, dice_provider)
+        typer.echo(f"  Hit! Damage: {dmg.damage_total}")
+        damaged = apply_damage(target, dmg.damage_total)
+        encounter = update_combatant(encounter, damaged)
+        if damaged.hit_points == 0:
+            typer.echo(f"  {target.display_name} is defeated!")
+            encounter = mark_defeated(encounter, target_id)
+    else:
+        typer.echo("  Miss!")
+
+    return encounter
+
+
+def _do_monster_ai_turn(
+    encounter: EncounterState,
+    monster_snap: CombatantSnapshot,
+    monster_entry: MonsterEntry,
+    dice_provider: DiceProvider,
+) -> EncounterState:
+    """Execute a monster AI turn via the shared monster_turn library."""
+    from chronicle_weaver_ai.monster_turn import run_monster_turn
+
+    encounter, result = run_monster_turn(encounter, monster_entry, dice_provider)
+
+    if result.resolved_attack is None:
+        typer.echo(f"  {monster_snap.display_name} has no valid action — skips turn.")
+        return encounter
+
+    target_display = (
+        encounter.combatants[result.target_id].display_name
+        if result.target_id is not None
+        else "???"
+    )
+    typer.echo(
+        f"  {monster_snap.display_name} attacks {target_display}"
+        f" with {result.action_name} — "
+        f"d20={result.attack_roll}+{result.resolved_attack.attack_bonus_total}"
+        f"={result.attack_total}"
+        f" vs AC {result.resolved_attack.target_armor_class}"
+    )
+
+    if result.hit:
+        typer.echo(f"  Hit! Damage: {result.damage_total}")
+        if result.target_defeated:
+            typer.echo(f"  {target_display} is defeated!")
+    else:
+        typer.echo("  Miss!")
+
+    return encounter
 
 
 @app.command()

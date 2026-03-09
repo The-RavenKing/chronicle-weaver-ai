@@ -1,0 +1,38 @@
+{
+  "id": "m.goblin",
+  "name": "Goblin",
+  "kind": "monster",
+  "description": "A small, scrappy humanoid with sharp teeth and a cowardly streak that vanishes the moment it outnumbers you.",
+  "tags": ["humanoid", "goblinoid", "small"],
+  "aliases": ["goblin"],
+  "size": "small",
+  "creature_type": "humanoid",
+  "armor_class": 13,
+  "hit_points": 7,
+  "speed": 30,
+  "abilities": {
+    "str": 8,
+    "dex": 14,
+    "con": 10,
+    "int": 10,
+    "wis": 8,
+    "cha": 8
+  },
+  "challenge_rating": "1/4",
+  "actions": [
+    {
+      "name": "Scimitar",
+      "attack_bonus": 4,
+      "damage_formula": "1d6 +2",
+      "target_count": 1,
+      "damage_type": "slashing"
+    },
+    {
+      "name": "Shortbow",
+      "attack_bonus": 4,
+      "damage_formula": "1d6 +2",
+      "target_count": 1,
+      "damage_type": "piercing"
+    }
+  ]
+}

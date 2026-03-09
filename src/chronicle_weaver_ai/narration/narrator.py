@@ -11,8 +11,10 @@ from urllib import error, request
 
 from chronicle_weaver_ai.narration.models import (
     ActionResult,
+    EncounterContext,
     NarrationRequest,
     NarrationResponse,
+    SceneState,
 )
 from chronicle_weaver_ai.models import JSONValue, _to_json_value
 
@@ -87,15 +89,25 @@ def build_user_prompt(request: NarrationRequest) -> str:
         "8. Never infer a die roll from attack_bonus_total.",
         "9. If attack_roll_d20 exists, you may reference it; if absent, do not mention a numeric roll.",
         "10. If auto_hit=true, do not imply a miss or failed connection.",
+        "10b. If hit_result=true, describe the attack connecting. If hit_result=false, describe a miss or deflection—never describe damage or HP loss in a miss.",
         "11. If damage is not resolved, do not invent HP loss or exact damage numbers.",
+        "11b. If defeated=true, narration may describe the target falling or being incapacitated. Do not invent gore or additional mechanics.",
+        "11c. If target_hp_after=0, do not describe the target continuing to fight.",
         "12. If resolution includes a rejection reason, do not narrate success.",
         "13. You may only describe details supported by Action Result, Resolved Action, or Context Items.",
         "14. Do not invent setting details (lighting, weather, scenery); use neutral language when unknown.",
         "15. Do not introduce new entities, locations, or items.",
+        "16. Encounter Context shows the current round and whose turn it is; you may reference it for immediacy.",
+        "17. Active conditions are listed in the Conditions section; do not invent conditions not listed there.",
+        "18. Never invent enemy reinforcements, terrain features, or lighting not present in context.",
         "",
         "Resolved Action:",
         *resolved_action_lines,
         "",
+        *_target_outcome_section(action),
+        *_scene_section(request.scene),
+        *_encounter_context_section(request.encounter_context),
+        *_conditions_section(request.encounter_context),
         "Context Items:",
         *context_lines,
         "",
@@ -275,6 +287,74 @@ def _with_article(name: str, is_subject: bool) -> str:
     return f"the {text}"
 
 
+def _target_outcome_section(action: ActionResult) -> list[str]:
+    """Return 'Target Outcome:' section lines when combat outcome fields are present."""
+    payload = action.resolved_action
+    if not payload:
+        return []
+    outcome_keys = (
+        "hit_result",
+        "damage_total",
+        "target_hp_before",
+        "target_hp_after",
+        "defeated",
+    )
+    lines: list[str] = []
+    for key in outcome_keys:
+        value = payload.get(key)
+        if value is not None:
+            lines.append(f"{key}: {_prompt_value(value)}")
+    if not lines:
+        return []
+    return ["Target Outcome:", *lines, ""]
+
+
+def _scene_section(scene: SceneState | None) -> list[str]:
+    """Return 'Scene:' section lines when a SceneState is provided."""
+    if scene is None:
+        return []
+    lines = [
+        "Scene:",
+        f"scene_id: {scene.scene_id}",
+        f"description: {scene.description_stub}",
+        f"combat_active: {'true' if scene.combat_active else 'false'}",
+    ]
+    if scene.combatants_present:
+        lines.append(f"combatants_present: {', '.join(scene.combatants_present)}")
+    lines.append("")
+    return lines
+
+
+def _encounter_context_section(ec: EncounterContext | None) -> list[str]:
+    """Return 'Encounter Context:' section lines when an EncounterContext is provided."""
+    if ec is None:
+        return []
+    order_str = " → ".join(ec.turn_order) if ec.turn_order else "(none)"
+    return [
+        "Encounter Context:",
+        f"round: {ec.current_round}",
+        f"acting_combatant: {ec.acting_combatant}",
+        f"turn_order: {order_str}",
+        "",
+    ]
+
+
+def _conditions_section(ec: EncounterContext | None) -> list[str]:
+    """Return 'Conditions:' section lines when an EncounterContext is provided."""
+    if ec is None:
+        return []
+    attacker_str = (
+        ", ".join(ec.attacker_conditions) if ec.attacker_conditions else "(none)"
+    )
+    target_str = ", ".join(ec.target_conditions) if ec.target_conditions else "(none)"
+    return [
+        "Conditions:",
+        f"attacker: {attacker_str}",
+        f"target: {target_str}",
+        "",
+    ]
+
+
 def _resolved_action_lines(action: ActionResult) -> list[str]:
     payload = action.resolved_action
     if not payload:
@@ -284,10 +364,20 @@ def _resolved_action_lines(action: ActionResult) -> list[str]:
         "entry_name",
         "action_cost",
         "explanation",
+        "attacker_name",
+        "target_name",
         "attack_roll_d20",
         "attack_bonus_total",
         "attack_total",
+        "target_armor_class",
+        "hit_result",
         "damage_formula",
+        "damage_rolls",
+        "damage_modifier_total",
+        "damage_total",
+        "target_hp_before",
+        "target_hp_after",
+        "defeated",
         "auto_hit",
         "effect_summary",
         "remaining_uses",

@@ -5,7 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, cast
 
-from chronicle_weaver_ai.compendium import FeatureEntry, SpellEntry, WeaponEntry
+from chronicle_weaver_ai.compendium import (
+    FeatureEntry,
+    MonsterAction,
+    SpellEntry,
+    WeaponEntry,
+)
+from chronicle_weaver_ai.rules.combatant import CombatantSnapshot
 from chronicle_weaver_ai.models import (
     Actor,
     TurnBudget,
@@ -243,6 +249,42 @@ def resolve_feature_use(
         remaining_uses=remaining_uses,
         effect_summary=feature_entry.effect_summary,
         reason=None,
+    )
+
+
+@dataclass(frozen=True)
+class ResolvedMonsterAttack:
+    action_kind: Literal["monster_attack"]
+    action_name: str
+    attacker_combatant_id: str
+    attacker_name: str
+    attack_bonus_total: int
+    damage_formula: str
+    target_count: int
+    target_armor_class: int | None
+    explanation: str
+
+
+def resolve_monster_action(
+    attacker: CombatantSnapshot,
+    action: MonsterAction,
+    target: CombatantSnapshot | None = None,
+) -> ResolvedMonsterAttack:
+    """Resolve a monster's weapon-like action; no dice rolled here."""
+    target_armor_class = target.armor_class if target is not None else None
+    return ResolvedMonsterAttack(
+        action_kind="monster_attack",
+        action_name=action.name,
+        attacker_combatant_id=attacker.combatant_id,
+        attacker_name=attacker.display_name,
+        attack_bonus_total=action.attack_bonus,
+        damage_formula=action.damage_formula,
+        target_count=action.target_count,
+        target_armor_class=target_armor_class,
+        explanation=(
+            f"{attacker.display_name}: {action.name}, "
+            f"attack +{action.attack_bonus}, {action.damage_formula}."
+        ),
     )
 
 
