@@ -27,12 +27,15 @@ class SceneState:
 
     description_stub is a short, GM-supplied flavour line (never LLM-invented).
     combatants_present contains display names of participants known to be in scene.
+    environment_tags are short descriptors (e.g. "dim_light", "rain") the narrator
+    may reference for atmosphere.
     """
 
     scene_id: str
     description_stub: str
     combat_active: bool
     combatants_present: list[str] = field(default_factory=list)
+    environment_tags: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

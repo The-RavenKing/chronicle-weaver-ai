@@ -48,12 +48,20 @@ from chronicle_weaver_ai.models import (
     Event,
     GameMode,
     GameState,
+    GmPersona,
     IntentResult,
     JSONValue,
     Mechanic,
+    PlayerPersona,
     TurnBudget,
+    advance_time,
+    clock_display,
 )
-from chronicle_weaver_ai.narration.models import ActionResult, NarrationRequest
+from chronicle_weaver_ai.narration.models import (
+    ActionResult,
+    NarrationRequest,
+    SceneState,
+)
 from chronicle_weaver_ai.narration.narrator import (
     Narrator,
     build_prompt_parts,
@@ -77,11 +85,20 @@ from chronicle_weaver_ai.encounter import (
     create_encounter,
     current_combatant,
     end_turn,
+    engage,
     is_encounter_over,
     mark_defeated,
     update_combatant,
 )
 from chronicle_weaver_ai.scribe.scribe import run_lore_scribe
+from chronicle_weaver_ai.encounter_events import (
+    emit_attack_resolved,
+    emit_combatant_defeated,
+    emit_encounter_ended,
+    emit_encounter_started,
+    emit_hp_changed,
+    emit_turn_started,
+)
 
 app = typer.Typer(add_completion=False, help="Chronicle Weaver deterministic CLI.")
 
@@ -175,6 +192,24 @@ def demo(
             "(e.g. --spawn goblin). Uses --seed / --fixed-entropy for dice."
         ),
     ),
+    event_log: str | None = typer.Option(
+        None,
+        "--event-log",
+        help="Append structured encounter events to this JSONL file (--spawn only).",
+    ),
+    campaign_file: str | None = typer.Option(
+        None,
+        "--campaign-file",
+        help="Campaign JSON to update with clock auto-advance after --spawn encounter.",
+    ),
+    companion: str | None = typer.Option(
+        None,
+        "--companion",
+        help=(
+            "Path to an actor JSON file for a companion who fights alongside the "
+            "player in --spawn encounters."
+        ),
+    ),
 ) -> None:
     """Run one deterministic vertical-slice turn."""
     if seed is not None and fixed_entropy is not None:
@@ -232,11 +267,29 @@ def demo(
                 "spawn error: no compendium loaded; use --compendium-root", err=True
             )
             raise typer.Exit(code=1)
+        spawn_narrator: Narrator | None = None
+        if auto_narrate:
+            try:
+                spawn_narrator = get_narrator(
+                    provider=narrator_provider, timeout_seconds=timeout
+                )
+            except ValueError:
+                pass
+        companion_actor: Actor | None = None
+        if companion is not None:
+            companion_actor = _load_demo_actor(companion)
         _run_spawn_encounter(
             compendium_store=compendium_store,
             spawn=spawn,
             actor=actor_state["actor"],
             dice_provider=provider,
+            event_log_path=event_log,
+            campaign_file=campaign_file,
+            narrator=spawn_narrator,
+            narrator_provider=narrator_provider,
+            timeout=timeout,
+            debug_prompt=debug_prompt,
+            companion_actor=companion_actor,
         )
         return
 
@@ -404,6 +457,7 @@ def _run_interactive_turn(
     actor_state: dict[str, Actor] | None = None,
     compendium_store: CompendiumStore | None = None,
     show_resolution: bool = False,
+    scene: SceneState | None = None,
 ) -> GameState:
     actor = actor_state.get("actor") if actor_state is not None else None
     (
@@ -467,6 +521,7 @@ def _run_interactive_turn(
                 action_category=turn_action.action_category,
                 resolved_action=turn_action.resolved_action,
             ),
+            scene=scene,
         )
         if debug_prompt:
             _emit_debug_prompt(request)
@@ -996,8 +1051,40 @@ def _run_spawn_encounter(
     spawn: str,
     actor: Actor,
     dice_provider: DiceProvider,
+    event_log_path: str | None = None,
+    campaign_file: str | None = None,
+    narrator: "Narrator | None" = None,
+    narrator_provider: str = "auto",
+    timeout: int | None = None,
+    debug_prompt: bool = False,
+    companion_actor: "Actor | None" = None,
 ) -> None:
-    """Run a deterministic player-vs-monster encounter to completion and print results."""
+    """Run a deterministic player-vs-monster encounter to completion and print results.
+
+    If *event_log_path* is given the structured encounter events are appended to
+    that JSONL file so they can be consumed by the scribe, replayed for
+    narration, or inspected offline.
+    If *campaign_file* is given the world clock is advanced by the encounter
+    duration and the campaign is saved.
+    If *narrator* is given (or *narrator_provider* resolves to one) each turn
+    produces LLM narrative prose after the deterministic resolution printout.
+    """
+    from chronicle_weaver_ai.campaign import (
+        CampaignScene,
+        set_scene_combat_active,
+    )
+    from chronicle_weaver_ai.narration.models import EncounterContext
+
+    # Resolve narrator — use passed narrator or try to build one
+    _narrator = narrator
+    if _narrator is None and narrator_provider != "auto":
+        try:
+            _narrator = get_narrator(
+                provider=narrator_provider, timeout_seconds=timeout
+            )
+        except ValueError:
+            pass
+
     # Resolve monster entry by name
     matches = compendium_store.find_by_name(spawn)
     monster_entry = next((e for e in matches if isinstance(e, MonsterEntry)), None)
@@ -1008,20 +1095,69 @@ def _run_spawn_encounter(
     player_snap = combatant_from_actor(actor)
     monster_snap = combatant_from_monster_entry(monster_entry)
 
-    encounter = create_encounter(
-        "enc.spawn", [player_snap, monster_snap], dice_provider
+    all_combatants = [player_snap, monster_snap]
+    if companion_actor is not None:
+        companion_snap = combatant_from_actor(companion_actor, source_type="companion")
+        all_combatants.append(companion_snap)
+
+    encounter = create_encounter("enc.spawn", all_combatants, dice_provider)
+
+    # Collect encounter events for event-log bridge
+    collected_events: list[Event] = []
+    ts_counter = [0]
+
+    def _ts() -> int:
+        ts_counter[0] += 1
+        return ts_counter[0]
+
+    collected_events.append(
+        emit_encounter_started(
+            encounter_id=encounter.encounter_id,
+            combatant_names=[s.display_name for s in encounter.combatants.values()],
+            initiative_order=list(encounter.turn_order.combatant_ids),
+            ts=_ts(),
+        )
     )
 
-    typer.echo(f"=== Encounter: {actor.name} vs {monster_entry.name} ===")
+    # Create scene and toggle combat_active
+    party_names = [actor.name] + (
+        [companion_actor.name] if companion_actor is not None else []
+    )
+    combatants_present = party_names + [monster_entry.name]
+    scene = CampaignScene(
+        scene_id="scene.spawn",
+        description_stub=(
+            f"A combat arena where {', '.join(party_names)} face {monster_entry.name}."
+        ),
+        combat_active=False,
+        combatants_present=combatants_present,
+    )
+    scene = set_scene_combat_active(scene, True)
+
+    encounter_title = " & ".join(party_names) + f" vs {monster_entry.name}"
+    typer.echo(f"=== Encounter: {encounter_title} ===")
+    typer.echo(f"Scene: {scene.description_stub} [combat_active={scene.combat_active}]")
     typer.echo(f"Initiative order: {', '.join(encounter.turn_order.combatant_ids)}")
     typer.echo()
 
+    rounds_elapsed = 0
     for _ in range(_SPAWN_ROUNDS_MAX):
         if is_encounter_over(encounter):
             break
 
         active_id = current_combatant(encounter.turn_order)
         active = encounter.combatants[active_id]
+        rounds_elapsed = encounter.turn_order.current_round
+
+        collected_events.append(
+            emit_turn_started(
+                encounter_id=encounter.encounter_id,
+                round_number=encounter.turn_order.current_round,
+                combatant_id=active_id,
+                combatant_name=active.display_name,
+                ts=_ts(),
+            )
+        )
 
         typer.echo(
             f"--- Round {encounter.turn_order.current_round}, "
@@ -1034,13 +1170,25 @@ def _run_spawn_encounter(
                 actor=actor,
                 compendium_store=compendium_store,
                 dice_provider=dice_provider,
+                events_out=collected_events,
+                ts_fn=_ts,
+            )
+        elif active.source_type == "companion" and companion_actor is not None:
+            encounter = _do_companion_ai_turn(
+                encounter=encounter,
+                companion_actor=companion_actor,
+                compendium_store=compendium_store,
+                dice_provider=dice_provider,
             )
         else:
             encounter = _do_monster_ai_turn(
                 encounter=encounter,
                 monster_snap=active,
                 monster_entry=monster_entry,
+                compendium_store=compendium_store,
                 dice_provider=dice_provider,
+                events_out=collected_events,
+                ts_fn=_ts,
             )
 
         # Print current HP after the turn
@@ -1049,16 +1197,63 @@ def _run_spawn_encounter(
                 "defeated" if cid in encounter.defeated_ids else f"HP={snap.hit_points}"
             )
             typer.echo(f"  {snap.display_name}: {status}")
-        typer.echo()
+
+        # Optional LLM narration per turn
+        if _narrator is not None:
+            enc_ctx = EncounterContext(
+                current_round=encounter.turn_order.current_round,
+                acting_combatant=active.display_name,
+                turn_order=[
+                    encounter.combatants[cid].display_name
+                    for cid in encounter.turn_order.combatant_ids
+                ],
+            )
+            narration_scene = SceneState(
+                scene_id=scene.scene_id,
+                description_stub=scene.description_stub,
+                combat_active=scene.combat_active,
+                combatants_present=list(scene.combatants_present),
+            )
+            ctx_bundle = ContextBuilder().build(state=GameState())
+            action_result = ActionResult(
+                intent="attack",
+                mechanic="combat_roll",
+                dice_roll=None,
+                mode_from="combat",
+                mode_to="combat",
+            )
+            narr_req = NarrationRequest(
+                context=ctx_bundle,
+                action=action_result,
+                scene=narration_scene,
+                encounter_context=enc_ctx,
+            )
+            if debug_prompt:
+                parts = build_prompt_parts(narr_req)
+                typer.echo(
+                    f"[DEBUG system]\n{parts[0]}\n[DEBUG user]\n{parts[1]}", err=True
+                )
+            try:
+                narr_resp = _narrator.narrate(narr_req)
+                typer.echo(f"\n{narr_resp.text}\n")
+            except Exception as exc:  # noqa: BLE001
+                typer.echo(f"  [narration error: {exc}]", err=True)
+        else:
+            typer.echo()
 
         if is_encounter_over(encounter):
             break
 
         encounter = end_turn(encounter)
 
+    # End combat — toggle scene
+    scene = set_scene_combat_active(scene, False)
+
     # Outcome
-    actor_ids = [
-        cid for cid, snap in encounter.combatants.items() if snap.source_type == "actor"
+    allied_ids = [
+        cid
+        for cid, snap in encounter.combatants.items()
+        if snap.source_type in ("actor", "companion")
     ]
     monster_ids = [
         cid
@@ -1066,13 +1261,85 @@ def _run_spawn_encounter(
         if snap.source_type == "monster"
     ]
     if all(cid in encounter.defeated_ids for cid in monster_ids):
-        typer.echo(f"Victory! {actor.name} has defeated {monster_entry.name}.")
-    elif all(cid in encounter.defeated_ids for cid in actor_ids):
-        typer.echo(f"Defeat! {actor.name} was defeated by {monster_entry.name}.")
+        outcome = "victory"
+        typer.echo(f"Victory! {encounter_title}")
+    elif all(cid in encounter.defeated_ids for cid in allied_ids):
+        outcome = "defeat"
+        typer.echo(f"Defeat! {encounter_title}")
     else:
+        outcome = "draw"
         typer.echo(
             f"Encounter ended after {_SPAWN_ROUNDS_MAX} rounds (no decisive outcome)."
         )
+    typer.echo(f"Scene: [combat_active={scene.combat_active}]")
+
+    collected_events.append(
+        emit_encounter_ended(
+            encounter_id=encounter.encounter_id,
+            outcome=outcome,
+            winner_ids=[
+                cid
+                for cid in allied_ids + monster_ids
+                if cid not in encounter.defeated_ids
+            ],
+            loser_ids=list(encounter.defeated_ids),
+            rounds_elapsed=rounds_elapsed,
+            ts=_ts(),
+        )
+    )
+
+    # Write event log if requested
+    if event_log_path:
+        import json as _json
+
+        with open(event_log_path, "a", encoding="utf-8") as fh:
+            for ev in collected_events:
+                fh.write(_json.dumps(ev.to_dict(), ensure_ascii=False) + "\n")
+        typer.echo(
+            f"Event log: {len(collected_events)} events written -> {event_log_path}"
+        )
+
+    # Advance world clock if a campaign file is provided
+    if campaign_file is not None:
+        import dataclasses as _dc
+
+        from chronicle_weaver_ai.campaign import load_campaign, save_campaign
+        from chronicle_weaver_ai.models import advance_clock_for_encounter
+
+        camp_path = Path(campaign_file)
+        if camp_path.exists():
+            campaign = load_campaign(camp_path)
+            new_clock = advance_clock_for_encounter(
+                campaign.world_clock, rounds_elapsed
+            )
+            updated_campaign = _dc.replace(campaign, world_clock=new_clock)
+            save_campaign(updated_campaign, camp_path)
+            typer.echo(f"Clock advanced: {clock_display(new_clock)}")
+        else:
+            typer.echo(f"Warning: campaign file not found: {campaign_file}", err=True)
+
+
+def _process_death_save(
+    encounter: EncounterState,
+    combatant_id: str,
+    dice_provider: DiceProvider,
+) -> EncounterState:
+    """Roll a death save for a dying combatant and update the encounter state."""
+    from chronicle_weaver_ai.rules import roll_death_save
+
+    snap = encounter.combatants[combatant_id]
+    new_snap, result = roll_death_save(snap, dice_provider)
+    encounter = update_combatant(encounter, new_snap)
+    typer.echo(
+        f"  {snap.display_name} rolls death save: {result.roll} → {result.outcome} "
+        f"(successes={result.new_successes}, failures={result.new_failures})"
+    )
+    if result.outcome == "dead":
+        typer.echo(f"  {snap.display_name} has died!")
+        encounter = mark_defeated(encounter, combatant_id)
+    elif result.outcome == "stable":
+        typer.echo(f"  {snap.display_name} has stabilised.")
+    return encounter
 
 
 def _do_player_ai_turn(
@@ -1080,8 +1347,23 @@ def _do_player_ai_turn(
     actor: Actor,
     compendium_store: CompendiumStore,
     dice_provider: DiceProvider,
+    events_out: list[Event] | None = None,
+    ts_fn: object = None,
 ) -> EncounterState:
-    """Execute a simple AI player turn: attack the first living monster with equipped weapon."""
+    """Execute a simple AI player turn: attack the first living monster with equipped weapon.
+
+    If the player is dying (HP=0) they roll a death saving throw instead.
+    """
+    from collections.abc import Callable
+
+    from chronicle_weaver_ai.rules import is_dying
+
+    _ts: Callable[[], int] = ts_fn if callable(ts_fn) else (lambda: 0)  # type: ignore[assignment]
+
+    player_snap = encounter.combatants.get(actor.actor_id)
+    if player_snap is not None and is_dying(player_snap):
+        return _process_death_save(encounter, actor.actor_id, dice_provider)
+
     weapon_id = actor.equipped_weapon_ids[0] if actor.equipped_weapon_ids else None
     if weapon_id is None:
         typer.echo(f"  {actor.name} has no equipped weapon — skips turn.")
@@ -1096,37 +1378,92 @@ def _do_player_ai_turn(
 
     resolved = resolve_weapon_attack(actor, weapon_entry)
 
-    target_id = next(
-        (
-            cid
-            for cid, snap in encounter.combatants.items()
-            if snap.source_type == "monster" and cid not in encounter.defeated_ids
-        ),
-        None,
-    )
-    if target_id is None:
-        return encounter
+    for attack_num in range(resolved.attack_count):
+        # Re-select target each swing (previous target may have been defeated)
+        target_id = next(
+            (
+                cid
+                for cid, snap in encounter.combatants.items()
+                if snap.source_type == "monster" and cid not in encounter.defeated_ids
+            ),
+            None,
+        )
+        if target_id is None:
+            break  # no more targets
 
-    target = encounter.combatants[target_id]
-    attack_record = roll_d20_record(dice_provider)
-    attack_total = attack_record.value + resolved.attack_bonus_total
+        target = encounter.combatants[target_id]
+        attack_record = roll_d20_record(dice_provider)
+        attack_total = attack_record.value + resolved.attack_bonus_total
 
-    typer.echo(
-        f"  {actor.name} attacks {target.display_name} with {weapon_entry.name} — "
-        f"d20={attack_record.value}+{resolved.attack_bonus_total}={attack_total} "
-        f"vs AC {target.armor_class}"
-    )
+        attack_label = (
+            f" (attack {attack_num + 1}/{resolved.attack_count})"
+            if resolved.attack_count > 1
+            else ""
+        )
+        typer.echo(
+            f"  {actor.name} attacks {target.display_name} with {weapon_entry.name}"
+            f"{attack_label} — "
+            f"d20={attack_record.value}+{resolved.attack_bonus_total}={attack_total} "
+            f"vs AC {target.armor_class}"
+        )
 
-    if target.armor_class is not None and attack_total >= target.armor_class:
-        dmg = roll_damage_formula(resolved.damage_formula, dice_provider)
-        typer.echo(f"  Hit! Damage: {dmg.damage_total}")
-        damaged = apply_damage(target, dmg.damage_total)
-        encounter = update_combatant(encounter, damaged)
-        if damaged.hit_points == 0:
-            typer.echo(f"  {target.display_name} is defeated!")
-            encounter = mark_defeated(encounter, target_id)
-    else:
-        typer.echo("  Miss!")
+        # Track melee engagement
+        encounter = engage(encounter, actor.actor_id, target_id)
+
+        hit = target.armor_class is not None and attack_total >= target.armor_class
+        damage_total = 0
+
+        if hit:
+            dmg = roll_damage_formula(resolved.damage_formula, dice_provider)
+            damage_total = dmg.damage_total
+            typer.echo(f"  Hit! Damage: {damage_total}")
+            old_hp = target.hit_points
+            damaged = apply_damage(target, damage_total)
+            encounter = update_combatant(encounter, damaged)
+            if events_out is not None:
+                events_out.append(
+                    emit_hp_changed(
+                        encounter.encounter_id,
+                        target_id,
+                        target.display_name,
+                        old_hp,
+                        damaged.hit_points,
+                        _ts(),
+                    )
+                )
+            if damaged.hit_points == 0:
+                typer.echo(f"  {target.display_name} is defeated!")
+                encounter = mark_defeated(encounter, target_id)
+                if events_out is not None:
+                    events_out.append(
+                        emit_combatant_defeated(
+                            encounter.encounter_id,
+                            target_id,
+                            target.display_name,
+                            _ts(),
+                        )
+                    )
+        else:
+            typer.echo("  Miss!")
+
+        if events_out is not None:
+            events_out.append(
+                emit_attack_resolved(
+                    encounter_id=encounter.encounter_id,
+                    attacker_id=actor.actor_id,
+                    attacker_name=actor.name,
+                    target_id=target_id,
+                    target_name=target.display_name,
+                    attack_roll=attack_record.value,
+                    attack_bonus=resolved.attack_bonus_total,
+                    attack_total=attack_total,
+                    target_ac=target.armor_class,
+                    hit=hit,
+                    damage_total=damage_total,
+                    weapon_name=weapon_entry.name,
+                    ts=_ts(),
+                )
+            )
 
     return encounter
 
@@ -1135,10 +1472,17 @@ def _do_monster_ai_turn(
     encounter: EncounterState,
     monster_snap: CombatantSnapshot,
     monster_entry: MonsterEntry,
+    compendium_store: CompendiumStore,
     dice_provider: DiceProvider,
+    events_out: list[Event] | None = None,
+    ts_fn: object = None,
 ) -> EncounterState:
     """Execute a monster AI turn via the shared monster_turn library."""
+    from collections.abc import Callable
+
     from chronicle_weaver_ai.monster_turn import run_monster_turn
+
+    _ts: Callable[[], int] = ts_fn if callable(ts_fn) else (lambda: 0)  # type: ignore[assignment]
 
     encounter, result = run_monster_turn(encounter, monster_entry, dice_provider)
 
@@ -1151,6 +1495,11 @@ def _do_monster_ai_turn(
         if result.target_id is not None
         else "???"
     )
+
+    # Track melee engagement when the monster attacks
+    if result.target_id is not None:
+        encounter = engage(encounter, monster_snap.combatant_id, result.target_id)
+
     typer.echo(
         f"  {monster_snap.display_name} attacks {target_display}"
         f" with {result.action_name} — "
@@ -1163,10 +1512,96 @@ def _do_monster_ai_turn(
         typer.echo(f"  Hit! Damage: {result.damage_total}")
         if result.target_defeated:
             typer.echo(f"  {target_display} is defeated!")
+            if events_out is not None and result.target_id is not None:
+                events_out.append(
+                    emit_combatant_defeated(
+                        encounter.encounter_id,
+                        result.target_id,
+                        target_display,
+                        _ts(),
+                    )
+                )
+    else:
+        typer.echo("  Miss!")
+
+    if events_out is not None and result.target_id is not None:
+        ra = result.resolved_attack
+        events_out.append(
+            emit_attack_resolved(
+                encounter_id=encounter.encounter_id,
+                attacker_id=monster_snap.combatant_id,
+                attacker_name=monster_snap.display_name,
+                target_id=result.target_id,
+                target_name=target_display,
+                attack_roll=result.attack_roll or 0,
+                attack_bonus=ra.attack_bonus_total,
+                attack_total=result.attack_total or 0,
+                target_ac=ra.target_armor_class,
+                hit=bool(result.hit),
+                damage_total=result.damage_total or 0,
+                weapon_name=result.action_name or "",
+                ts=_ts(),
+            )
+        )
+
+    return encounter
+
+
+def _do_companion_ai_turn(
+    encounter: EncounterState,
+    companion_actor: Actor,
+    compendium_store: CompendiumStore,
+    dice_provider: DiceProvider,
+) -> EncounterState:
+    """Execute a companion AI turn using the companion_turn pipeline."""
+    from chronicle_weaver_ai.companion_turn import run_companion_turn
+    from chronicle_weaver_ai.rules import is_dying
+
+    companion_snap = encounter.combatants.get(companion_actor.actor_id)
+    if companion_snap is not None and is_dying(companion_snap):
+        return _process_death_save(encounter, companion_actor.actor_id, dice_provider)
+
+    encounter, result = run_companion_turn(
+        encounter, companion_actor, compendium_store, dice_provider
+    )
+
+    if result.skipped_reason:
+        typer.echo(f"  {result.companion_name} skips turn ({result.skipped_reason}).")
+        return encounter
+
+    target_name = (
+        encounter.combatants[result.target_id].display_name
+        if result.target_id is not None
+        else "???"
+    )
+    typer.echo(
+        f"  {result.companion_name} attacks {target_name} with {result.action_name} — "
+        f"d20={result.attack_roll}+{result.attack_bonus}={result.attack_total} "
+        f"vs AC {result.target_ac}"
+    )
+    if result.hit:
+        typer.echo(f"  Hit! Damage: {result.damage_total}")
+        if result.target_defeated:
+            typer.echo(f"  {target_name} is defeated!")
     else:
         typer.echo("  Miss!")
 
     return encounter
+
+
+def _print_opp_attack_results(results: list) -> None:
+    """Print opportunity attack results to the CLI."""
+    for oar in results:
+        hit_str = (
+            f"Hit! Damage: {oar.damage_total}"
+            if oar.hit
+            else f"Miss (roll {oar.attack_total} vs AC {oar.target_ac})"
+        )
+        typer.echo(
+            f"  [OA] {oar.reactor_name} strikes {oar.mover_name} "
+            f"(d20={oar.attack_roll}+{oar.attack_bonus}={oar.attack_total}"
+            f" vs AC {oar.target_ac}) — {hit_str}"
+        )
 
 
 @app.command()
@@ -1811,10 +2246,14 @@ def _default_demo_actor() -> Actor:
         known_spell_ids=["s.magic_missile"],
         feature_ids=["f.second_wind"],
         spell_slots={1: 2},
+        spell_slots_max={1: 2},
         resources={"second_wind_uses": 1},
+        max_resources={"second_wind_uses": 1},
         armor_class=16,
         hit_points=24,
         max_hit_points=28,
+        hit_die="d10",
+        hit_dice_remaining=3,
     )
 
 
@@ -1846,10 +2285,23 @@ def _parse_actor_payload(raw: object, source: str) -> Actor:
         raw.get("spell_slots", {}), source, "spell_slots"
     )
     resources = _actor_str_key_mapping(raw.get("resources", {}), source, "resources")
+    max_resources = _actor_str_key_mapping(
+        raw.get("max_resources", {}), source, "max_resources"
+    )
+    spell_slots_max = _actor_int_key_mapping(
+        raw.get("spell_slots_max", {}), source, "spell_slots_max"
+    )
     armor_class = _actor_optional_int(raw.get("armor_class"), source, "armor_class")
     hit_points = _actor_optional_int(raw.get("hit_points"), source, "hit_points")
     max_hit_points = _actor_optional_int(
         raw.get("max_hit_points"), source, "max_hit_points"
+    )
+    equipped_armor_id = _actor_optional_str(
+        raw.get("equipped_armor_id"), "equipped_armor_id", source
+    )
+    hit_die = _actor_optional_str(raw.get("hit_die"), "hit_die", source)
+    hit_dice_remaining = _actor_optional_int(
+        raw.get("hit_dice_remaining"), source, "hit_dice_remaining"
     )
     return Actor(
         actor_id=actor_id,
@@ -1864,10 +2316,15 @@ def _parse_actor_payload(raw: object, source: str) -> Actor:
         feature_ids=feature_ids,
         item_ids=item_ids,
         spell_slots=spell_slots,
+        spell_slots_max=spell_slots_max,
         resources=resources,
+        max_resources=max_resources,
         armor_class=armor_class,
         hit_points=hit_points,
         max_hit_points=max_hit_points,
+        equipped_armor_id=equipped_armor_id,
+        hit_die=hit_die,
+        hit_dice_remaining=hit_dice_remaining,
     )
 
 
@@ -2245,6 +2702,300 @@ def _context_bundle_to_dict(bundle: ContextBundle) -> dict[str, JSONValue]:
         "items": items,
         "total_tokens_est": bundle.total_tokens_est,
     }
+
+
+@app.command()
+def reject(
+    queue: str = typer.Option(..., "--queue", help="Review queue JSONL path."),
+    id: str = typer.Option(..., "--id", help="Queue item id to reject."),
+) -> None:
+    """Reject one pending queue item (marks it rejected; does not add to lorebook)."""
+    queue_store = LoreQueueStore()
+    try:
+        queue_store.mark_rejected(queue, id)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"reject error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Rejected {id}")
+
+
+@app.command()
+def rest(
+    rest_type: str = typer.Option(
+        "short",
+        "--type",
+        help="Rest type: short or long.",
+    ),
+    actor: str | None = typer.Option(
+        None,
+        "--actor",
+        help="Actor sheet JSON path. Uses default demo hero if omitted.",
+    ),
+    hit_dice: int = typer.Option(
+        1,
+        "--hit-dice",
+        help="Number of hit dice to spend during a short rest.",
+    ),
+    seed: int | None = typer.Option(
+        None, "--seed", help="Seed deterministic dice provider for repeatable runs."
+    ),
+    save_actor: str | None = typer.Option(
+        None,
+        "--save-actor",
+        help="Write updated actor sheet JSON to this path after resting.",
+    ),
+    campaign_file: str | None = typer.Option(
+        None,
+        "--campaign-file",
+        help="Campaign JSON to update with clock auto-advance after the rest.",
+    ),
+) -> None:
+    """Apply a short or long rest to an actor sheet and print the result."""
+    from chronicle_weaver_ai.rules import apply_long_rest, apply_short_rest
+
+    if rest_type not in ("short", "long"):
+        typer.echo("--type must be 'short' or 'long'", err=True)
+        raise typer.Exit(code=1)
+
+    actor_obj = _load_demo_actor(actor)
+
+    if rest_type == "short":
+        dice_provider = (
+            SeededDiceProvider(seed) if seed is not None else LocalCSPRNGDiceProvider()
+        )
+        updated_actor, rolls = apply_short_rest(actor_obj, dice_provider, hit_dice)
+        hp_gained = (updated_actor.hit_points or 0) - (actor_obj.hit_points or 0)
+        typer.echo(f"Short rest: {actor_obj.name}")
+        if rolls:
+            typer.echo(
+                f"  Hit dice spent: {len(rolls)}  Rolls: {rolls}  HP gained: {hp_gained}"
+            )
+        else:
+            typer.echo(
+                "  No hit dice available."
+                f" (remaining={actor_obj.hit_dice_remaining or 0})"
+            )
+    else:
+        updated_actor = apply_long_rest(actor_obj)
+        hp_restored = (updated_actor.hit_points or 0) - (actor_obj.hit_points or 0)
+        typer.echo(f"Long rest: {actor_obj.name}")
+        typer.echo(
+            f"  HP: {actor_obj.hit_points} -> {updated_actor.hit_points} (+{hp_restored})"
+        )
+
+    typer.echo(
+        f"  HP: {updated_actor.hit_points}/{updated_actor.max_hit_points}"
+        f"  Resources: {dict(updated_actor.resources)}"
+        f"  Hit dice remaining: {updated_actor.hit_dice_remaining}"
+    )
+
+    if save_actor is not None:
+        from chronicle_weaver_ai.campaign import actor_to_dict
+
+        Path(save_actor).write_text(
+            json.dumps(actor_to_dict(updated_actor), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        typer.echo(f"  Saved actor -> {save_actor}")
+
+    if campaign_file is not None:
+        import dataclasses as _dc
+
+        from chronicle_weaver_ai.campaign import load_campaign, save_campaign
+        from chronicle_weaver_ai.models import advance_clock_for_rest
+
+        camp_path = Path(campaign_file)
+        if camp_path.exists():
+            campaign = load_campaign(camp_path)
+            new_clock = advance_clock_for_rest(campaign.world_clock, rest_type)
+            updated_campaign = _dc.replace(campaign, world_clock=new_clock)
+            save_campaign(updated_campaign, camp_path)
+            typer.echo(f"  Clock advanced: {clock_display(new_clock)}")
+        else:
+            typer.echo(f"  Warning: campaign file not found: {campaign_file}", err=True)
+
+
+@app.command("advance-time")
+def advance_time_cmd(
+    minutes: int = typer.Option(..., "--minutes", help="Minutes to advance the clock."),
+    campaign_file: str = typer.Option(
+        ..., "--campaign-file", help="Path to campaign JSON file."
+    ),
+) -> None:
+    """Advance the world clock by a given number of minutes and save the campaign."""
+    from chronicle_weaver_ai.campaign import load_campaign, save_campaign
+
+    path = Path(campaign_file)
+    if not path.exists():
+        typer.echo(f"Campaign file not found: {campaign_file}", err=True)
+        raise typer.Exit(code=1)
+
+    campaign = load_campaign(path)
+    before = clock_display(campaign.world_clock)
+    new_clock = advance_time(campaign.world_clock, minutes)
+    import dataclasses as _dc
+
+    updated = _dc.replace(campaign, world_clock=new_clock)
+    save_campaign(updated, path)
+    after = clock_display(updated.world_clock)
+    typer.echo(f"Clock advanced +{minutes}m: {before} -> {after}")
+
+
+@app.command("set-persona")
+def set_persona(
+    campaign_file: str = typer.Option(
+        ..., "--campaign-file", help="Path to campaign JSON file."
+    ),
+    gm_style: str = typer.Option(
+        "balanced", "--gm-style", help="GM style: balanced/gritty/heroic/comedic."
+    ),
+    narrative_voice: str = typer.Option(
+        "third_person",
+        "--narrative-voice",
+        help="Narrative voice: third_person/second_person.",
+    ),
+    detail_level: str = typer.Option(
+        "medium", "--detail-level", help="Detail level: sparse/medium/vivid."
+    ),
+    character_name: str = typer.Option("", "--character-name", help="PC name."),
+    class_flavor: str = typer.Option(
+        "", "--class-flavor", help="PC class flavor description."
+    ),
+    pronouns: str = typer.Option(
+        "they/them", "--pronouns", help="PC preferred pronouns."
+    ),
+) -> None:
+    """Update GM and player personas on a campaign file."""
+    from chronicle_weaver_ai.campaign import load_campaign, save_campaign
+
+    path = Path(campaign_file)
+    if not path.exists():
+        typer.echo(f"Campaign file not found: {campaign_file}", err=True)
+        raise typer.Exit(code=1)
+
+    campaign = load_campaign(path)
+    new_gm = GmPersona(
+        gm_style=gm_style,
+        narrative_voice=narrative_voice,
+        detail_level=detail_level,
+    )
+    new_player = PlayerPersona(
+        character_name=character_name,
+        class_flavor=class_flavor,
+        pronouns=pronouns,
+    )
+    import dataclasses as _dc
+
+    updated = _dc.replace(campaign, gm_persona=new_gm, player_persona=new_player)
+    save_campaign(updated, path)
+    typer.echo(
+        f"GM persona: style={gm_style} voice={narrative_voice} detail={detail_level}"
+    )
+    if character_name:
+        typer.echo(f"Player persona: {character_name} ({class_flavor}) [{pronouns}]")
+
+
+@app.command("check-conflicts")
+def check_conflicts_cmd(
+    queue: str = typer.Argument(..., help="Path to lore queue JSONL file."),
+    lorebook: str = typer.Argument(..., help="Path to lorebook JSON file."),
+    status: str = typer.Option(
+        "pending", "--status", help="Queue status to check (pending/approved/all)."
+    ),
+) -> None:
+    """Check pending lore queue items for conflicts against the lorebook."""
+    from chronicle_weaver_ai.lore.store import LorebookStore, detect_conflicts
+
+    lorebook_store = LorebookStore()
+    lore = lorebook_store.load(lorebook)
+
+    queue_store = LoreQueueStore()
+    status_filter: str | None = None if status == "all" else status
+    items = queue_store.list_items(queue, status=status_filter)
+
+    conflicts = detect_conflicts(items, lore)
+    if not conflicts:
+        typer.echo(f"No conflicts found ({len(items)} items checked).")
+        return
+
+    typer.echo(f"{len(conflicts)} conflict(s) found:")
+    for c in conflicts:
+        typer.echo(f"  [{c.conflict_type}] item={c.item_id}")
+        typer.echo(f"    {c.description}")
+
+
+@app.command("import-foundry")
+def import_foundry_cmd(
+    input_path: str = typer.Argument(
+        ..., help="Path to Foundry VTT .json or .db (NeDB) file."
+    ),
+    output_dir: str = typer.Option(
+        "compendiums/imported",
+        "--output-dir",
+        help="Directory to write Chronicle Weaver JSON compendium files.",
+    ),
+) -> None:
+    """Import a Foundry VTT compendium pack into Chronicle Weaver JSON format."""
+    from chronicle_weaver_ai.compendium.foundry_adapter import load_foundry_pack
+
+    src = Path(input_path)
+    if not src.exists():
+        typer.echo(f"Error: {src} does not exist.", err=True)
+        raise typer.Exit(1)
+
+    entries = load_foundry_pack(src)
+    if not entries:
+        typer.echo("No supported entries found in the pack.")
+        raise typer.Exit(0)
+
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    written = 0
+    for entry in entries:
+        from dataclasses import asdict as _asdict
+
+        data = _asdict(entry)
+        fname = f"{entry.kind}_{entry.id.replace('.', '_')}.json"
+        out_file = out_dir / fname
+        with out_file.open("w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+        written += 1
+
+    typer.echo(f"Imported {written} entries from '{src}' → '{out_dir}'")
+
+
+@app.command("export-foundry")
+def export_foundry_cmd(
+    compendium_root: str = typer.Option(
+        "compendiums",
+        "--compendium-root",
+        help="Chronicle Weaver compendium root directory to export.",
+    ),
+    output_path: str = typer.Option(
+        "foundry_export/chronicle_core.db",
+        "--output",
+        help="Output .db (NeDB JSONL) file path.",
+    ),
+) -> None:
+    """Export Chronicle Weaver compendium entries to a Foundry VTT .db pack."""
+    from chronicle_weaver_ai.compendium.foundry_adapter import export_to_foundry_pack
+
+    store = CompendiumStore()
+    try:
+        roots = resolve_compendium_roots(compendium_root)
+        store.load(roots)
+    except CompendiumLoadError as exc:
+        typer.echo(f"Error loading compendium: {exc}", err=True)
+        raise typer.Exit(1)
+
+    if not store.entries:
+        typer.echo("No compendium entries found.")
+        raise typer.Exit(0)
+
+    out_path = Path(output_path)
+    written = export_to_foundry_pack(store.entries, out_path)
+    typer.echo(f"Exported {written} entries → '{out_path}'")
 
 
 if __name__ == "__main__":

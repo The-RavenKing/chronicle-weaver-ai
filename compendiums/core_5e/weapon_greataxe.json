@@ -1,0 +1,12 @@
+{
+  "id": "w.greataxe",
+  "kind": "weapon",
+  "name": "Greataxe",
+  "description": "A massive two-handed axe that delivers devastating cleaving blows.",
+  "tags": ["weapon", "melee", "heavy", "two-handed"],
+  "damage": "1d12",
+  "damage_type": "slashing",
+  "properties": ["heavy", "two-handed"],
+  "attack_ability": "str",
+  "proficient_required": true
+}

@@ -1,0 +1,44 @@
+{
+  "id": "m.troll",
+  "name": "Troll",
+  "kind": "monster",
+  "description": "A massive, regenerating giant with claws and a maw that can cleave through armour. Only fire and acid halt its regeneration.",
+  "tags": [
+    "giant",
+    "large"
+  ],
+  "aliases": [
+    "troll"
+  ],
+  "size": "large",
+  "creature_type": "giant",
+  "armor_class": 15,
+  "hit_points": 84,
+  "speed": 30,
+  "abilities": {
+    "str": 18,
+    "dex": 13,
+    "con": 20,
+    "int": 7,
+    "wis": 9,
+    "cha": 7
+  },
+  "challenge_rating": "5",
+  "actions": [
+    {
+      "name": "Claw",
+      "attack_bonus": 7,
+      "damage_formula": "2d6 +4",
+      "target_count": 1,
+      "damage_type": "slashing"
+    },
+    {
+      "name": "Bite",
+      "attack_bonus": 7,
+      "damage_formula": "1d6 +4",
+      "target_count": 1,
+      "damage_type": "piercing"
+    }
+  ],
+  "xp_reward": 1800
+}

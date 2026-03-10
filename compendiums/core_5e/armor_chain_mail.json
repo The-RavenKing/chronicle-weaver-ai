@@ -1,0 +1,12 @@
+{
+  "id": "armor.chain_mail",
+  "kind": "armor",
+  "name": "Chain Mail",
+  "description": "Made of interlocking metal rings, chain mail includes a layer of quilted fabric worn underneath the mail to prevent chafing and to cushion the impact of blows.",
+  "tags": ["armor", "heavy", "metal"],
+  "aliases": ["chain mail", "chainmail", "chain armor"],
+  "armor_class_base": 16,
+  "max_dex_bonus": 0,
+  "strength_requirement": 13,
+  "armor_type": "heavy"
+}

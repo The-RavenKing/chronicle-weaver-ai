@@ -1,0 +1,38 @@
+{
+  "id": "m.hobgoblin",
+  "name": "Hobgoblin",
+  "kind": "monster",
+  "description": "A disciplined, militaristic goblinoid that fights with martial precision.",
+  "tags": [
+    "humanoid",
+    "goblinoid",
+    "medium"
+  ],
+  "aliases": [
+    "hobgoblin"
+  ],
+  "size": "medium",
+  "creature_type": "humanoid",
+  "armor_class": 18,
+  "hit_points": 11,
+  "speed": 30,
+  "abilities": {
+    "str": 13,
+    "dex": 12,
+    "con": 12,
+    "int": 10,
+    "wis": 10,
+    "cha": 9
+  },
+  "challenge_rating": "1/2",
+  "actions": [
+    {
+      "name": "Longsword",
+      "attack_bonus": 3,
+      "damage_formula": "1d8 +1",
+      "target_count": 1,
+      "damage_type": "slashing"
+    }
+  ],
+  "xp_reward": 100
+}

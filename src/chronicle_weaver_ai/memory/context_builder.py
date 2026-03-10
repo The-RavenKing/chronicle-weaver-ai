@@ -10,7 +10,15 @@ from chronicle_weaver_ai.memory.context_budget import (
     estimate_tokens,
 )
 from chronicle_weaver_ai.memory.context_models import ContextBundle, ContextItem
-from chronicle_weaver_ai.models import Event, GameState
+from chronicle_weaver_ai.models import (
+    CompanionPersona,
+    Event,
+    GameState,
+    GmPersona,
+    PlayerPersona,
+    WorldClock,
+    clock_display,
+)
 from chronicle_weaver_ai.scribe.scribe import run_lore_scribe
 
 SYSTEM_HEADER = "You are the GM. LLM generates words, not outcomes."
@@ -37,21 +45,32 @@ class ContextBuilder:
         lore_entries: Sequence[ContextEntry] | None = None,
         budget_tokens: int = 256,
         recent_limit: int = 6,
+        world_clock: WorldClock | None = None,
+        gm_persona: GmPersona | None = None,
+        player_persona: PlayerPersona | None = None,
+        companions: list[CompanionPersona] | None = None,
     ) -> ContextBundle:
         items: list[ContextItem] = []
+
+        persona_text = _persona_text(gm_persona, player_persona, companions)
+        clock_text = (
+            f"World clock: {clock_display(world_clock)}."
+            if world_clock is not None
+            else "World clock: Day 1, 08:00 (morning)."
+        )
 
         items.extend(
             [
                 _item(
                     "always.persona",
                     "always_on",
-                    "Persona: Deterministic fantasy GM assistant.",
+                    persona_text,
                     PRIORITY_ALWAYS_ON,
                 ),
                 _item(
                     "always.clock",
                     "always_on",
-                    "World clock: stub (deterministic timeline placeholder).",
+                    clock_text,
                     PRIORITY_ALWAYS_ON,
                 ),
                 _item(
@@ -197,6 +216,32 @@ def _dedupe_items(items: Sequence[ContextItem]) -> list[ContextItem]:
         if current is None or _is_preferred(item, current):
             winners[item.id] = item
     return list(winners.values())
+
+
+def _persona_text(
+    gm: GmPersona | None,
+    player: PlayerPersona | None,
+    companions: list[CompanionPersona] | None = None,
+) -> str:
+    """Build a compact persona context string from GM, player, and companion personas."""
+    gm = gm or GmPersona()
+    parts = [
+        f"GM style: {gm.gm_style}",
+        f"voice: {gm.narrative_voice}",
+        f"detail: {gm.detail_level}",
+    ]
+    if player and player.character_name:
+        parts.append(f"PC: {player.character_name}")
+        if player.class_flavor:
+            parts.append(f"({player.class_flavor})")
+        parts.append(f"pronouns: {player.pronouns}")
+    if companions:
+        companion_strs = [
+            f"{c.character_name} [{c.role}]" for c in companions if c.character_name
+        ]
+        if companion_strs:
+            parts.append("companions: " + ", ".join(companion_strs))
+    return "Persona: " + ", ".join(parts) + "."
 
 
 def _is_preferred(candidate: ContextItem, current: ContextItem) -> bool:

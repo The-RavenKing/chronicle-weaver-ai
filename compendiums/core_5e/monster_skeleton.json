@@ -1,0 +1,34 @@
+{
+  "id": "m.skeleton",
+  "kind": "monster",
+  "name": "Skeleton",
+  "description": "The animated bones of the dead, driven by dark magic and a hatred of the living.",
+  "tags": [
+    "monster",
+    "undead"
+  ],
+  "size": "medium",
+  "creature_type": "undead",
+  "armor_class": 13,
+  "hit_points": 13,
+  "speed": 30,
+  "abilities": {
+    "str": 10,
+    "dex": 14,
+    "con": 15,
+    "int": 6,
+    "wis": 8,
+    "cha": 5
+  },
+  "actions": [
+    {
+      "name": "Shortsword",
+      "attack_bonus": 4,
+      "damage_formula": "1d6+2",
+      "target_count": 1,
+      "damage_type": "piercing"
+    }
+  ],
+  "challenge_rating": "0.25",
+  "xp_reward": 50
+}

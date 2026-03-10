@@ -1,0 +1,13 @@
+{
+  "id": "f.action_surge",
+  "kind": "feature",
+  "name": "Action Surge",
+  "description": "Starting at 2nd level, you can push yourself beyond your normal limits for a moment. On your turn, you can take one additional action.",
+  "tags": ["fighter", "action", "surge"],
+  "aliases": ["action surge ability"],
+  "feature_type": "surge",
+  "action_type": "none",
+  "usage_key": "action_surge_uses",
+  "effect_summary": "Take one additional action on your current turn.",
+  "reset_on": "short_rest"
+}

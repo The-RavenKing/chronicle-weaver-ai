@@ -35,6 +35,7 @@ class ResolvedWeaponAttack:
     action_cost: Literal["action"]
     action_available: bool
     explanation: str
+    attack_count: int = 1  # Extra Attack grants 2+
 
 
 @dataclass(frozen=True)
@@ -91,9 +92,12 @@ def resolve_weapon_attack(
         intrinsic_bonus=intrinsic_damage_bonus,
     )
     action_available = _is_action_cost_available("action", turn_budget)
+    # Extra Attack: presence of "f.extra_attack" in feature_ids grants 2 attacks
+    attack_count = 2 if "f.extra_attack" in actor.feature_ids else 1
     explanation = (
         f"{weapon_entry.name}: {attack_ability.upper()} mod {ability_mod:+d}, "
         f"proficiency {proficiency_bonus:+d}, magic {magic_bonus:+d}."
+        + (f" Extra Attack ({attack_count}x)." if attack_count > 1 else "")
     )
     return ResolvedWeaponAttack(
         action_kind="attack",
@@ -105,6 +109,7 @@ def resolve_weapon_attack(
         action_cost="action",
         action_available=action_available,
         explanation=explanation,
+        attack_count=attack_count,
     )
 
 
@@ -332,3 +337,20 @@ def _choose_spell_slot_level(actor: Actor, spell_level: int) -> int | None:
         if slot_level >= spell_level:
             return slot_level
     return None
+
+
+def consume_spell_slot(actor: Actor, slot_level: int) -> Actor:
+    """Return a copy of *actor* with one spell slot at *slot_level* decremented.
+
+    If the actor has no slot at that level this is a no-op (returns actor unchanged).
+    Cantrips (slot_level == 0) are always a no-op.
+    """
+    from dataclasses import replace as _replace
+
+    if slot_level <= 0:
+        return actor
+    current = actor.spell_slots.get(slot_level, 0)
+    if current <= 0:
+        return actor
+    new_slots = {**actor.spell_slots, slot_level: current - 1}
+    return _replace(actor, spell_slots=new_slots)

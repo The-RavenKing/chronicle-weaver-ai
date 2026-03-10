@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chronicle-weaver"
 version = "0.1.0"
-description = "Chronicle Weaver deterministic AI RPG engine."
+description = "Chronicle Weaver — deterministic AI-driven tabletop RPG engine."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

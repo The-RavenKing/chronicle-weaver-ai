@@ -1,0 +1,14 @@
+{
+  "id": "w.light_crossbow",
+  "name": "Light Crossbow",
+  "kind": "weapon",
+  "description": "A compact ranged weapon that fires bolts with deadly accuracy.",
+  "tags": ["simple", "ranged", "ammunition"],
+  "aliases": ["crossbow", "light crossbow"],
+  "damage": "1d8",
+  "damage_type": "piercing",
+  "properties": ["ammunition", "two_handed"],
+  "attack_ability": "dex",
+  "proficient_required": true,
+  "damage_bonus": 0
+}

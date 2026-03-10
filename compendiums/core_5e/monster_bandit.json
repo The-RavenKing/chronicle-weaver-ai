@@ -1,0 +1,39 @@
+{
+  "id": "m.bandit",
+  "name": "Bandit",
+  "kind": "monster",
+  "description": "A desperate outlaw who preys on travellers for coin or survival.",
+  "tags": [
+    "humanoid",
+    "medium"
+  ],
+  "aliases": [
+    "bandit",
+    "brigand",
+    "thug"
+  ],
+  "size": "medium",
+  "creature_type": "humanoid",
+  "armor_class": 12,
+  "hit_points": 11,
+  "speed": 30,
+  "abilities": {
+    "str": 11,
+    "dex": 12,
+    "con": 12,
+    "int": 10,
+    "wis": 10,
+    "cha": 10
+  },
+  "challenge_rating": "1/8",
+  "actions": [
+    {
+      "name": "Scimitar",
+      "attack_bonus": 3,
+      "damage_formula": "1d6 +1",
+      "target_count": 1,
+      "damage_type": "slashing"
+    }
+  ],
+  "xp_reward": 25
+}

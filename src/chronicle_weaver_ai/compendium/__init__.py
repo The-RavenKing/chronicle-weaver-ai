@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .models import (
+    ArmorEntry,
     CompendiumEntry,
     EntryKind,
     FeatureEntry,
@@ -21,6 +22,7 @@ from .store import (
 )
 
 __all__ = [
+    "ArmorEntry",
     "CompendiumEntry",
     "EntryKind",
     "WeaponEntry",

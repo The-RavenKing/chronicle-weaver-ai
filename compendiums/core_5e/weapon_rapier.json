@@ -1,0 +1,14 @@
+{
+  "id": "w.rapier",
+  "name": "Rapier",
+  "kind": "weapon",
+  "description": "A slender, agile blade favoured by duelists and rogues.",
+  "tags": ["martial", "finesse"],
+  "aliases": ["rapier"],
+  "damage": "1d8",
+  "damage_type": "piercing",
+  "properties": ["finesse"],
+  "attack_ability": "dex",
+  "proficient_required": true,
+  "damage_bonus": 0
+}

@@ -11,6 +11,7 @@ from typing import Iterable, Sequence
 from chronicle_weaver_ai.models import JSONValue
 
 from .models import (
+    ArmorEntry,
     CompendiumEntry,
     EntryKind,
     FeatureEntry,
@@ -314,6 +315,32 @@ def _parse_entry(raw: dict[str, JSONValue], path: Path) -> CompendiumEntry:
             healing_level_bonus=_as_bool(
                 raw.get("healing_level_bonus", False), "healing_level_bonus", path
             ),
+            reset_on=_as_optional_str(raw.get("reset_on"), "reset_on", path),
+        )
+    if kind == "armor":
+        return ArmorEntry(
+            id=entry_id,
+            name=name,
+            kind=kind,
+            description=description,
+            tags=tags,
+            aliases=aliases,
+            source_path=source_path,
+            armor_class_base=_as_int(
+                raw.get("armor_class_base"), "armor_class_base", path, default=10
+            ),
+            max_dex_bonus=_as_optional_int(
+                raw.get("max_dex_bonus"), "max_dex_bonus", path, default=None
+            ),
+            strength_requirement=_as_optional_int(
+                raw.get("strength_requirement"),
+                "strength_requirement",
+                path,
+                default=None,
+            ),
+            armor_type=_as_str(
+                raw.get("armor_type"), "armor_type", path, default="light"
+            ),
         )
     if kind == "monster":
         return MonsterEntry(
@@ -343,7 +370,7 @@ def _parse_entry(raw: dict[str, JSONValue], path: Path) -> CompendiumEntry:
         )
     raise CompendiumLoadError(
         str(path),
-        f"invalid kind '{kind}', expected one of: weapon, spell, item, feature, monster",
+        f"invalid kind '{kind}', expected one of: weapon, spell, item, feature, monster, armor",
     )
 
 

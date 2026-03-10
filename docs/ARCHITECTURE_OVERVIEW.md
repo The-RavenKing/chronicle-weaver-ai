@@ -14,7 +14,57 @@ Do not attempt multiple milestones simultaneously.
 
 ---
 
-# Milestone 1 — Acceptance + Regression Stabilization
+## Milestone Status (as of 2026-03-10, 566 tests passing)
+
+| Milestone | Status |
+|-----------|--------|
+| M1 — Acceptance + Regression Stabilization | ✅ Complete |
+| M2 — Encounter AI (Monster Turns) | ✅ Complete |
+| M3 — Healing & Resource Restoration | ✅ Complete |
+| M4 — Conditions with Mechanical Effects | ✅ Complete |
+| M5 — Opportunity Attacks & Reactions | ✅ Complete |
+| M6 — Inventory & Equipment State | ✅ Complete |
+| M7 — Scene State & Environmental Context | ✅ Complete |
+| M8 — Campaign Persistence | ✅ Complete |
+| M9 — API Layer | ✅ Complete |
+| M10 — Minimal UI Shell | ✅ Complete |
+| P1 — Short / Long Rest Mechanics | ✅ Complete |
+| P2 — State Snapshot / Rollback | ✅ Complete |
+| P3 — Scribe Approve / Reject Workflow | ✅ Complete |
+| P4 — Expanded Compendium (14 entries) | ✅ Complete |
+| P5 — World Clock | ✅ Complete |
+| P6 — Persona System (GM + Player) | ✅ Complete |
+| P7 — Scribe Conflict Detection | ✅ Complete |
+| P8 — Encounter Event Bridge | ✅ Complete |
+| P9 — Companion Personas | ✅ Complete |
+| P10 — Hybrid Retrieval (n-gram TF-IDF + lexical) | ✅ Complete |
+| P11 — AoE Spell Targeting | ✅ Complete |
+| P12 — Concentration Tracking | ✅ Complete |
+| P13 — XP & Levelling | ✅ Complete |
+
+**10 original milestones + 13 post-roadmap features complete. 566 tests passing.**
+
+### What was built (P8–P10)
+
+| Feature | Key files | Tests |
+|---------|-----------|-------|
+| P8 — Encounter event bridge | `encounter_events.py`, `cli.py` (`--event-log`) | 9 tests |
+| P9 — Companion personas | `models.py`, `campaign.py`, `context_builder.py` | 8 tests |
+| P10 — Hybrid retrieval | `retrieval/dense.py`, `retrieval/hybrid.py` | 18 tests |
+
+### Remaining opportunities (beyond original scope)
+
+| Idea | Notes |
+|------|-------|
+| Full engine/spawn unification | Spawn loop still runs outside engine.process_input(). Events now bridge the gap but the loops remain separate. |
+| Sentence-transformer RAG | Requires numpy/transformers deps — currently using char n-gram TF-IDF as soft-match proxy. |
+| AoE spell targeting | Fireball/Thunderwave currently single-target in resolver; multi-target loop not yet wired. |
+| Experience/levelling system | XP awards and level-up logic not yet implemented. |
+| Concentration tracking | Spells requiring concentration (e.g. Bless, Hold Person) have no duration enforcement. |
+
+---
+
+# Milestone 1 — Acceptance + Regression Stabilization ✅
 
 Goal:
 Stabilize the full vertical slice and ensure end-to-end gameplay works.
@@ -63,7 +113,7 @@ After completion print:
 
 ---
 
-# Milestone 2 — Encounter AI (Monster Turns)
+# Milestone 2 — Encounter AI (Monster Turns) ✅
 
 Goal:
 Allow monsters to act during encounters.
@@ -91,7 +141,7 @@ Do not implement advanced AI yet.
 
 ---
 
-# Milestone 3 — Healing & Resource Restoration
+# Milestone 3 — Healing & Resource Restoration ✅
 
 Goal:
 Add deterministic healing and resource restoration.
@@ -118,7 +168,7 @@ apply_healing()
 
 ---
 
-# Milestone 4 — Conditions with Mechanical Effects
+# Milestone 4 — Conditions with Mechanical Effects ✅
 
 Goal:
 Make conditions affect gameplay.
@@ -147,7 +197,7 @@ Tests:
 
 ---
 
-# Milestone 5 — Opportunity Attacks & Reactions
+# Milestone 5 — Opportunity Attacks & Reactions ✅
 
 Goal:
 Implement deterministic reaction system.
@@ -171,7 +221,7 @@ Tests:
 
 ---
 
-# Milestone 6 — Inventory & Equipment State
+# Milestone 6 — Inventory & Equipment State ✅
 
 Goal:
 Allow equipment to influence combat.
@@ -197,7 +247,7 @@ Tests:
 
 ---
 
-# Milestone 7 — Scene State & Environmental Context
+# Milestone 7 — Scene State & Environmental Context ✅
 
 Goal:
 Allow narration and gameplay to reference scene state.
@@ -220,7 +270,7 @@ Tests:
 
 ---
 
-# Milestone 8 — Campaign Persistence
+# Milestone 8 — Campaign Persistence ✅
 
 Goal:
 Persist campaigns, encounters, and actors.
@@ -247,7 +297,7 @@ Tests:
 
 ---
 
-# Milestone 9 — API Layer
+# Milestone 9 — API Layer ✅
 
 Goal:
 Expose engine functionality through a FastAPI API.
@@ -270,7 +320,7 @@ Tests:
 
 ---
 
-# Milestone 10 — Minimal UI Shell
+# Milestone 10 — Minimal UI Shell ✅
 
 Goal:
 Provide a thin UI to interact with the engine.

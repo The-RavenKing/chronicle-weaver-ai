@@ -1,0 +1,12 @@
+{
+  "id": "w.dagger",
+  "kind": "weapon",
+  "name": "Dagger",
+  "description": "A small, light blade that can be thrown or used in melee.",
+  "tags": ["weapon", "melee", "finesse", "light", "thrown"],
+  "damage": "1d4",
+  "damage_type": "piercing",
+  "properties": ["finesse", "light", "thrown"],
+  "attack_ability": "dex",
+  "proficient_required": true
+}

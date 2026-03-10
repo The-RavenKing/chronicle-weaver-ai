@@ -3,8 +3,14 @@
   "name": "Goblin",
   "kind": "monster",
   "description": "A small, scrappy humanoid with sharp teeth and a cowardly streak that vanishes the moment it outnumbers you.",
-  "tags": ["humanoid", "goblinoid", "small"],
-  "aliases": ["goblin"],
+  "tags": [
+    "humanoid",
+    "goblinoid",
+    "small"
+  ],
+  "aliases": [
+    "goblin"
+  ],
   "size": "small",
   "creature_type": "humanoid",
   "armor_class": 13,
@@ -34,5 +40,6 @@
       "target_count": 1,
       "damage_type": "piercing"
     }
-  ]
+  ],
+  "xp_reward": 50
 }

@@ -1,0 +1,34 @@
+{
+  "id": "m.orc",
+  "kind": "monster",
+  "name": "Orc",
+  "description": "A brutal humanoid warrior with a greataxe, driven by aggression and hatred.",
+  "tags": [
+    "monster",
+    "humanoid"
+  ],
+  "size": "medium",
+  "creature_type": "humanoid",
+  "armor_class": 13,
+  "hit_points": 15,
+  "speed": 30,
+  "abilities": {
+    "str": 16,
+    "dex": 12,
+    "con": 16,
+    "int": 7,
+    "wis": 11,
+    "cha": 10
+  },
+  "actions": [
+    {
+      "name": "Greataxe",
+      "attack_bonus": 5,
+      "damage_formula": "1d12+3",
+      "target_count": 1,
+      "damage_type": "slashing"
+    }
+  ],
+  "challenge_rating": "0.5",
+  "xp_reward": 100
+}

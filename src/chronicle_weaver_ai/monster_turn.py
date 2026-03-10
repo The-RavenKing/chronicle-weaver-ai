@@ -24,6 +24,7 @@ from chronicle_weaver_ai.encounter import (
     update_combatant,
 )
 from chronicle_weaver_ai.rules.combatant import CombatantSnapshot, apply_damage
+from chronicle_weaver_ai.rules.levelling import xp_reward_for_cr
 from chronicle_weaver_ai.rules.resolver import (
     ResolvedMonsterAttack,
     resolve_monster_action,
@@ -53,6 +54,10 @@ class MonsterTurnResult:
     target_hp_before: int | None = None
     target_hp_after: int | None = None
     target_defeated: bool = False
+    # XP awarded when target_defeated is True (CR lookup; 0 for non-monsters / misses)
+    xp_awarded: int = 0
+    # Whether the target is now dying (actor/companion at 0 HP) rather than dead
+    target_dying: bool = False
 
 
 def select_monster_action(
@@ -145,8 +150,23 @@ def run_monster_turn(
         hp_after = damaged.hit_points
         encounter = update_combatant(encounter, damaged)
         if isinstance(hp_after, int) and hp_after == 0:
-            target_defeated = True
-            encounter = mark_defeated(encounter, target_id)
+            # Monsters are immediately defeated; actors/companions enter dying state.
+            if target.source_type == "monster":
+                target_defeated = True
+                encounter = mark_defeated(encounter, target_id)
+
+    # Actor/companion at 0 HP → dying (rolls death saves on their turn)
+    target_dying = (
+        hit
+        and isinstance(hp_after, int)
+        and hp_after == 0
+        and target.source_type in ("actor", "companion")
+    )
+    # XP award for defeating a monster
+    xp_awarded = 0
+    if target_defeated and target.source_type == "monster":
+        cr = getattr(monster_entry, "challenge_rating", None)
+        xp_awarded = xp_reward_for_cr(cr) if cr is not None else 0
 
     result = MonsterTurnResult(
         combatant_id=active_id,
@@ -161,5 +181,7 @@ def run_monster_turn(
         target_hp_before=hp_before,
         target_hp_after=hp_after,
         target_defeated=target_defeated,
+        xp_awarded=xp_awarded,
+        target_dying=target_dying,
     )
     return encounter, result

@@ -1,0 +1,17 @@
+{
+  "id": "s.shield",
+  "kind": "spell",
+  "name": "Shield",
+  "description": "An invisible barrier of magical force appears, granting +5 AC and blocking magic missile until the start of your next turn.",
+  "tags": ["spell", "reaction", "defensive", "level1"],
+  "aliases": ["shield"],
+  "level": 1,
+  "school": "abjuration",
+  "casting_time": "reaction",
+  "range": "self",
+  "components": ["V", "S"],
+  "duration": "1 round",
+  "action_type": "reaction",
+  "auto_hit": true,
+  "effect_summary": "Grant yourself +5 AC until the start of your next turn as a reaction."
+}

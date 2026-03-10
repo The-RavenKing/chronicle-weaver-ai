@@ -7,7 +7,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from chronicle_weaver_ai.lore.models import LoreQueueItem, Lorebook
+from chronicle_weaver_ai.lore.models import ConflictReport, LoreQueueItem, Lorebook
 from chronicle_weaver_ai.lore.normalize import (
     canonicalize_entity_record,
     player_entity,
@@ -47,6 +47,13 @@ class LoreQueueStore:
         return [item for item in items if item.status == status]
 
     def mark_approved(self, path: str, item_id: str) -> LoreQueueItem:
+        return self._set_status(path, item_id, "approved")
+
+    def mark_rejected(self, path: str, item_id: str) -> LoreQueueItem:
+        """Mark a queue item as rejected (will not be imported to lorebook)."""
+        return self._set_status(path, item_id, "rejected")
+
+    def _set_status(self, path: str, item_id: str, new_status: str) -> LoreQueueItem:
         items = self._load_all(path)
         updated: list[LoreQueueItem] = []
         matched: LoreQueueItem | None = None
@@ -56,7 +63,7 @@ class LoreQueueStore:
                     id=item.id,
                     kind=item.kind,
                     payload=item.payload,
-                    status="approved",
+                    status=new_status,
                     source_session=item.source_session,
                     ts=item.ts,
                 )
@@ -91,6 +98,13 @@ class LoreQueueStore:
                 handle.write(json.dumps(_queue_item_to_dict(item), ensure_ascii=False))
                 handle.write("\n")
 
+    def check_conflicts(
+        self, queue_path: str, lorebook: Lorebook, status: str | None = "pending"
+    ) -> list[ConflictReport]:
+        """Return conflict reports for queue items compared to an existing lorebook."""
+        items = self.list_items(queue_path, status=status)
+        return detect_conflicts(items, lorebook)
+
     def _read_existing_ids(self, path: str) -> set[str]:
         queue_path = Path(path)
         if not queue_path.exists():
@@ -111,6 +125,93 @@ class LoreQueueStore:
                     if isinstance(raw_id, str) and raw_id:
                         ids.add(raw_id)
         return ids
+
+
+def detect_conflicts(
+    items: list[LoreQueueItem],
+    lorebook: Lorebook,
+) -> list[ConflictReport]:
+    """Detect conflicts between incoming queue items and an existing lorebook.
+
+    Checks entity items against lorebook.entities for:
+    - name_mismatch  — same entity_id but different name
+    - kind_mismatch  — same entity_id but different kind
+    - duplicate_name — same name maps to a different entity_id
+
+    Returns a list of ConflictReport, one per detected conflict.
+    """
+    reports: list[ConflictReport] = []
+
+    # Build lookup indices from lorebook entities (dicts)
+    by_id: dict[str, dict] = {}
+    by_name: dict[str, dict] = {}
+    for ent in lorebook.entities:
+        eid = str(ent.get("entity_id", ""))
+        ename = str(ent.get("name", "")).lower()
+        if eid:
+            by_id[eid] = ent  # type: ignore[arg-type]
+        if ename:
+            by_name[ename] = ent  # type: ignore[arg-type]
+
+    for item in items:
+        if item.kind != "entity":
+            continue
+
+        entity_id = str(item.payload.get("entity_id", ""))
+        incoming_name = str(item.payload.get("name", ""))
+        incoming_kind = str(item.payload.get("kind", ""))
+
+        if entity_id and entity_id in by_id:
+            existing = by_id[entity_id]
+            existing_name = str(existing.get("name", ""))
+            existing_kind = str(existing.get("kind", ""))
+
+            if incoming_name and existing_name.lower() != incoming_name.lower():
+                reports.append(
+                    ConflictReport(
+                        item_id=item.id,
+                        conflict_type="name_mismatch",
+                        description=(
+                            f"Entity '{entity_id}': lorebook name '{existing_name}'"
+                            f" conflicts with incoming '{incoming_name}'"
+                        ),
+                        existing_value=existing_name,
+                        incoming_value=incoming_name,
+                    )
+                )
+            if incoming_kind and existing_kind != incoming_kind:
+                reports.append(
+                    ConflictReport(
+                        item_id=item.id,
+                        conflict_type="kind_mismatch",
+                        description=(
+                            f"Entity '{entity_id}': lorebook kind '{existing_kind}'"
+                            f" conflicts with incoming '{incoming_kind}'"
+                        ),
+                        existing_value=existing_kind,
+                        incoming_value=incoming_kind,
+                    )
+                )
+        elif incoming_name:
+            name_lower = incoming_name.lower()
+            if name_lower in by_name:
+                existing = by_name[name_lower]
+                existing_id = str(existing.get("entity_id", ""))
+                if existing_id and existing_id != entity_id:
+                    reports.append(
+                        ConflictReport(
+                            item_id=item.id,
+                            conflict_type="duplicate_name",
+                            description=(
+                                f"Name '{incoming_name}' already used by entity"
+                                f" '{existing_id}' (incoming id: '{entity_id}')"
+                            ),
+                            existing_value=existing_id,
+                            incoming_value=entity_id,
+                        )
+                    )
+
+    return reports
 
 
 class LorebookStore:
@@ -292,21 +393,25 @@ def _queue_item_from_dict(raw: object, index: int) -> LoreQueueItem:
         raise ValueError(f"Invalid queue item at line {index}: bad kind")
     if not isinstance(payload_raw, dict):
         raise ValueError(f"Invalid queue item at line {index}: payload must be object")
-    if not isinstance(status_raw, str) or status_raw not in {"pending", "approved"}:
+    if not isinstance(status_raw, str) or status_raw not in {
+        "pending",
+        "approved",
+        "rejected",
+    }:
         raise ValueError(f"Invalid queue item at line {index}: bad status")
     if not isinstance(source_raw, str):
         raise ValueError(
             f"Invalid queue item at line {index}: source_session must be text"
         )
-    if not isinstance(ts_raw, int):
-        raise ValueError(f"Invalid queue item at line {index}: ts must be int")
+    if not isinstance(ts_raw, (int, float)):
+        raise ValueError(f"Invalid queue item at line {index}: ts must be numeric")
     return LoreQueueItem(
         id=id_raw,
         kind=kind_raw,
         payload=payload_raw,
         status=status_raw,
         source_session=source_raw,
-        ts=ts_raw,
+        ts=int(ts_raw),
     )
 
 

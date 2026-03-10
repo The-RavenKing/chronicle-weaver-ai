@@ -1,0 +1,20 @@
+{
+  "id": "s.thunderwave",
+  "kind": "spell",
+  "name": "Thunderwave",
+  "description": "A wave of thunderous force sweeps out from you, dealing 2d8 thunder damage (CON save for half) and pushing creatures 10 feet.",
+  "tags": ["spell", "aoe", "level1"],
+  "aliases": ["thunderwave", "thunder wave"],
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": "self (15-foot cube)",
+  "components": ["V", "S"],
+  "duration": "instantaneous",
+  "action_type": "action",
+  "auto_hit": false,
+  "save_ability": "con",
+  "target_type": "area",
+  "concentration": false,
+  "effect_summary": "All creatures in a 15-foot cube make a CON save DC 13 or take 2d8 thunder damage and are pushed 10 feet."
+}

@@ -1,0 +1,12 @@
+{
+  "id": "f.extra_attack",
+  "kind": "feature",
+  "name": "Extra Attack",
+  "description": "Beginning at 5th level, you can attack twice, instead of once, whenever you take the Attack action on your turn.",
+  "tags": ["fighter", "barbarian", "ranger", "paladin", "passive"],
+  "aliases": ["extra attack", "multiattack"],
+  "feature_type": "class_feature",
+  "action_type": "passive",
+  "usage_key": null,
+  "effect_summary": "Make 2 weapon attacks when you take the Attack action."
+}

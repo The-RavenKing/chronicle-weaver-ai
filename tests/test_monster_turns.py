@@ -223,13 +223,16 @@ def test_run_monster_turn_on_miss_leaves_hp_unchanged() -> None:
     assert fighter_after.hit_points == 28  # unchanged
 
 
-def test_run_monster_turn_defeats_actor_when_hp_reaches_zero() -> None:
-    """Monster hit that reduces actor to 0 HP marks actor as defeated.
+def test_run_monster_turn_actor_enters_dying_state_at_zero_hp() -> None:
+    """Monster hit that reduces actor to 0 HP puts actor in dying state (not immediately defeated).
 
-    Fighter HP=5, goblin damage=8 on a hit → fighter HP=0 → defeated.
+    Actors have death saves — they are only defeated after 3 failed saves, not at 0 HP.
+    Monsters are immediately defeated when reduced to 0 HP.
+
+    Fighter HP=5, goblin damage=8 on a hit → fighter HP=0 → dying (not yet in defeated_ids).
 
     attack entropy: 11 → d20=12, attack_total=16 ≥ 16 → hit
-    damage entropy:  5 → d6=6, damage_total=8 > 5 → defeated
+    damage entropy:  5 → d6=6, damage_total=8 > 5 → HP=0 → dying
     """
     store = _store()
     goblin_entry = _goblin_entry(store)
@@ -245,10 +248,9 @@ def test_run_monster_turn_defeats_actor_when_hp_reaches_zero() -> None:
 
     assert result.hit is True
     assert result.target_hp_after == 0
-    assert result.target_defeated is True
-
-    # Fighter is in defeated_ids
-    assert "pc.fighter" in updated_enc.defeated_ids
+    # Actor enters dying state — not immediately defeated
+    assert result.target_defeated is False
+    assert "pc.fighter" not in updated_enc.defeated_ids
     # HP is 0 in the combatant record
     fighter_after = get_combatant(updated_enc, "pc.fighter")
     assert fighter_after.hit_points == 0

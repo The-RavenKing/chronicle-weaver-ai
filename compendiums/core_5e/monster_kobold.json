@@ -1,0 +1,38 @@
+{
+  "id": "m.kobold",
+  "name": "Kobold",
+  "kind": "monster",
+  "description": "A small, cunning reptilian creature that fights with pack tactics and crude traps.",
+  "tags": [
+    "humanoid",
+    "reptilian",
+    "small"
+  ],
+  "aliases": [
+    "kobold"
+  ],
+  "size": "small",
+  "creature_type": "humanoid",
+  "armor_class": 12,
+  "hit_points": 5,
+  "speed": 30,
+  "abilities": {
+    "str": 7,
+    "dex": 15,
+    "con": 9,
+    "int": 8,
+    "wis": 7,
+    "cha": 8
+  },
+  "challenge_rating": "1/8",
+  "actions": [
+    {
+      "name": "Dagger",
+      "attack_bonus": 4,
+      "damage_formula": "1d4 +2",
+      "target_count": 1,
+      "damage_type": "piercing"
+    }
+  ],
+  "xp_reward": 25
+}

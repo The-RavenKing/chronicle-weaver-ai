@@ -1,0 +1,37 @@
+{
+  "id": "m.zombie",
+  "name": "Zombie",
+  "kind": "monster",
+  "description": "A shambling undead driven by primal hunger, relentlessly slow but almost impossible to put down permanently.",
+  "tags": [
+    "undead",
+    "medium"
+  ],
+  "aliases": [
+    "zombie"
+  ],
+  "size": "medium",
+  "creature_type": "undead",
+  "armor_class": 8,
+  "hit_points": 22,
+  "speed": 20,
+  "abilities": {
+    "str": 13,
+    "dex": 6,
+    "con": 16,
+    "int": 3,
+    "wis": 6,
+    "cha": 5
+  },
+  "challenge_rating": "1/4",
+  "actions": [
+    {
+      "name": "Slam",
+      "attack_bonus": 3,
+      "damage_formula": "1d6 +1",
+      "target_count": 1,
+      "damage_type": "bludgeoning"
+    }
+  ],
+  "xp_reward": 50
+}

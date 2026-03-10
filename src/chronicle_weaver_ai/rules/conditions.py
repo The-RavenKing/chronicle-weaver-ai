@@ -7,13 +7,20 @@ from typing import Literal
 
 from chronicle_weaver_ai.rules.combatant import Condition, CombatantSnapshot
 
-RollMode = Literal["normal", "disadvantage"]
+RollMode = Literal["normal", "advantage", "disadvantage"]
 
 # Conditions that prevent the combatant from taking any action/bonus/reaction.
-_BLOCKING_CONDITIONS: frozenset[str] = frozenset({"stunned"})
+_BLOCKING_CONDITIONS: frozenset[str] = frozenset({"stunned", "incapacitated"})
 
 # Conditions that impose disadvantage on the combatant's own attack rolls.
-_DISADVANTAGE_CONDITIONS: frozenset[str] = frozenset({"poisoned", "prone"})
+_DISADVANTAGE_CONDITIONS: frozenset[str] = frozenset(
+    {"poisoned", "prone", "blinded", "frightened", "restrained", "exhausted"}
+)
+
+# Conditions that grant advantage to attackers targeting this combatant.
+_GRANTS_ADVANTAGE_TO_ATTACKERS: frozenset[str] = frozenset(
+    {"prone", "blinded", "stunned", "restrained"}
+)
 
 
 def add_condition(
@@ -68,7 +75,7 @@ def is_blocked_by_conditions(snapshot: CombatantSnapshot) -> str | None:
     """Return a rejection reason string if any condition blocks all actions, else None.
 
     A combatant is blocked when it carries a condition in _BLOCKING_CONDITIONS
-    (currently only 'stunned').  The returned string is suitable for display as
+    (stunned or incapacitated).  The returned string is suitable for display as
     a resolution rejection reason.
     """
     for condition in snapshot.conditions:
@@ -81,7 +88,7 @@ def attack_roll_mode(snapshot: CombatantSnapshot) -> RollMode:
     """Return the roll mode that applies to this combatant's own attack rolls.
 
     Returns 'disadvantage' if the combatant has any condition in
-    _DISADVANTAGE_CONDITIONS (poisoned or prone), otherwise 'normal'.
+    _DISADVANTAGE_CONDITIONS, otherwise 'normal'.
     Only one roll mode is returned; if multiple disadvantage sources are
     present the result is still 'disadvantage' (no stacking).
     """
@@ -89,6 +96,15 @@ def attack_roll_mode(snapshot: CombatantSnapshot) -> RollMode:
     if active_names & _DISADVANTAGE_CONDITIONS:
         return "disadvantage"
     return "normal"
+
+
+def target_grants_advantage(snapshot: CombatantSnapshot) -> bool:
+    """Return True if the target's conditions grant advantage to melee attackers.
+
+    Covers: prone, blinded, stunned, restrained.
+    """
+    active_names = {c.condition_name for c in snapshot.conditions}
+    return bool(active_names & _GRANTS_ADVANTAGE_TO_ATTACKERS)
 
 
 def render_condition(condition: Condition) -> str:

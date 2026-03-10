@@ -95,6 +95,12 @@ class Actor:
     armor_class: int | None = None
     hit_points: int | None = None
     max_hit_points: int | None = None
+    equipped_armor_id: str | None = None
+    hit_die: str | None = None
+    hit_dice_remaining: int | None = None
+    max_resources: dict[str, int] = field(default_factory=dict)
+    spell_slots_max: dict[int, int] = field(default_factory=dict)
+    xp: int = 0
 
 
 def ability_modifier(score: int) -> int:
@@ -227,6 +233,124 @@ class CombatState:
     entropy_source: str | None = None
     entropy_fallback_reason: str | None = None
     turn_budget: TurnBudget = field(default_factory=new_turn_budget)
+
+
+@dataclass(frozen=True)
+class WorldClock:
+    """Absolute in-world time tracker.
+
+    day    — campaign day number (1-based).
+    hour   — 0–23 (24-hour).
+    minute — 0–59.
+    """
+
+    day: int = 1
+    hour: int = 8
+    minute: int = 0
+
+
+def advance_time(clock: WorldClock, minutes: int) -> WorldClock:
+    """Return a new WorldClock advanced by *minutes* from *clock*."""
+    total = clock.hour * 60 + clock.minute + minutes
+    new_day = clock.day + total // (24 * 60)
+    remaining = total % (24 * 60)
+    return WorldClock(day=new_day, hour=remaining // 60, minute=remaining % 60)
+
+
+def time_of_day(clock: WorldClock) -> str:
+    """Return a descriptive time-of-day label for the current hour."""
+    h = clock.hour
+    if h == 0:
+        return "midnight"
+    if h < 5:
+        return "deep_night"
+    if h < 7:
+        return "dawn"
+    if h < 11:
+        return "morning"
+    if h < 14:
+        return "midday"
+    if h < 17:
+        return "afternoon"
+    if h < 20:
+        return "dusk"
+    return "night"
+
+
+def clock_display(clock: WorldClock) -> str:
+    """Return a short human-readable clock string, e.g. 'Day 3, 14:30 (afternoon)'."""
+    return (
+        f"Day {clock.day}, {clock.hour:02d}:{clock.minute:02d} ({time_of_day(clock)})"
+    )
+
+
+_SHORT_REST_MINUTES = 60
+_LONG_REST_MINUTES = 480
+_ENCOUNTER_MINUTES_PER_ROUND = 10
+
+
+def advance_clock_for_rest(clock: WorldClock, rest_type: str) -> WorldClock:
+    """Return a clock advanced by the standard in-world rest duration.
+
+    rest_type: "short" → +1 hour,  "long" → +8 hours.
+    """
+    minutes = _LONG_REST_MINUTES if rest_type == "long" else _SHORT_REST_MINUTES
+    return advance_time(clock, minutes)
+
+
+def advance_clock_for_encounter(clock: WorldClock, rounds_elapsed: int) -> WorldClock:
+    """Return a clock advanced by *rounds_elapsed* × 10 minutes (1 combat round ≈ 6 s)."""
+    return advance_time(clock, max(rounds_elapsed, 1) * _ENCOUNTER_MINUTES_PER_ROUND)
+
+
+@dataclass(frozen=True)
+class GmPersona:
+    """GM narrator persona configuration.
+
+    gm_style       — overall narrative tone (balanced/gritty/heroic/comedic).
+    narrative_voice— grammatical perspective (third_person/second_person).
+    detail_level   — prose density (sparse/medium/vivid).
+    """
+
+    gm_style: str = "balanced"
+    narrative_voice: str = "third_person"
+    detail_level: str = "medium"
+
+
+@dataclass(frozen=True)
+class PlayerPersona:
+    """Player-character persona for narrator grounding.
+
+    character_name — in-world name of the PC.
+    class_flavor   — short phrase describing play style (e.g. 'stoic fighter').
+    pronouns       — preferred pronouns for narrator use (e.g. 'they/them').
+    """
+
+    character_name: str = ""
+    class_flavor: str = ""
+    pronouns: str = "they/them"
+
+
+DEFAULT_GM_PERSONA = GmPersona()
+DEFAULT_PLAYER_PERSONA = PlayerPersona()
+
+
+@dataclass(frozen=True)
+class CompanionPersona:
+    """Persona for a party member, NPC ally, or companion character.
+
+    companion_id — stable identifier (e.g. 'companion.npc.elara').
+    character_name — in-world name.
+    class_flavor  — short play-style phrase (e.g. 'wise healer').
+    pronouns      — preferred pronouns for narrator use.
+    role          — 'party_member' | 'npc_ally' | 'follower'.
+    """
+
+    companion_id: str
+    character_name: str
+    class_flavor: str = ""
+    pronouns: str = "they/them"
+    role: str = "party_member"
 
 
 @dataclass(frozen=True)

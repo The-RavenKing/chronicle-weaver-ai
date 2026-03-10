@@ -51,3 +51,21 @@ class Lorebook:
     entities: list[dict[str, JSONValue]]
     facts: list[dict[str, JSONValue]]
     relations: list[dict[str, JSONValue]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ConflictReport:
+    """Describes a detected conflict between an incoming queue item and the lorebook.
+
+    item_id        — queue item ID that caused the conflict.
+    conflict_type  — 'name_mismatch' | 'kind_mismatch' | 'duplicate_name'.
+    description    — human-readable explanation.
+    existing_value — current value in the lorebook.
+    incoming_value — value in the incoming queue item.
+    """
+
+    item_id: str
+    conflict_type: str
+    description: str
+    existing_value: str
+    incoming_value: str

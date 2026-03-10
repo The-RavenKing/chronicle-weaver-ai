@@ -20,7 +20,14 @@ from chronicle_weaver_ai.encounter import (
     EncounterTurnOrder,
     InitiativeRoll,
 )
-from chronicle_weaver_ai.models import Actor, TurnBudget
+from chronicle_weaver_ai.models import (
+    Actor,
+    CompanionPersona,
+    GmPersona,
+    PlayerPersona,
+    TurnBudget,
+    WorldClock,
+)
 from chronicle_weaver_ai.rules.combatant import Condition, CombatantSnapshot
 
 
@@ -33,12 +40,15 @@ class CampaignScene:
 
     description_stub is a brief GM-written flavour line — never LLM-generated.
     combatants_present holds display names of entities known to be in the scene.
+    environment_tags are short descriptors for the scene (e.g. "dim_light", "rain",
+    "stone_floor") that the narrator may reference for atmosphere.
     """
 
     scene_id: str
     description_stub: str
     combat_active: bool = False
     combatants_present: list[str] = field(default_factory=list)
+    environment_tags: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -61,6 +71,38 @@ class CampaignState:
     session_log_refs: list[str]
     active_encounter_id: str | None = None
     encounter_states: dict[str, EncounterState] = field(default_factory=dict)
+    world_clock: WorldClock = field(default_factory=WorldClock)
+    gm_persona: GmPersona = field(default_factory=GmPersona)
+    player_persona: PlayerPersona = field(default_factory=PlayerPersona)
+    companions: list[CompanionPersona] = field(default_factory=list)
+
+
+# ── Scene lifecycle helpers ──────────────────────────────────────────────────
+
+
+def scene_from_campaign(scene: CampaignScene) -> Any:
+    """Convert a CampaignScene to a narration SceneState."""
+    from chronicle_weaver_ai.narration.models import SceneState
+
+    return SceneState(
+        scene_id=scene.scene_id,
+        description_stub=scene.description_stub,
+        combat_active=scene.combat_active,
+        combatants_present=list(scene.combatants_present),
+        environment_tags=list(scene.environment_tags),
+    )
+
+
+def set_scene_combat_active(scene: CampaignScene, active: bool) -> CampaignScene:
+    """Return a new scene with combat_active toggled."""
+    return dataclasses.replace(scene, combat_active=active)
+
+
+def update_scene_combatants(
+    scene: CampaignScene, combatant_names: list[str]
+) -> CampaignScene:
+    """Return a new scene with combatants_present updated."""
+    return dataclasses.replace(scene, combatants_present=combatant_names)
 
 
 # ── Actor serialisation ───────────────────────────────────────────────────────
@@ -89,6 +131,11 @@ def actor_to_dict(actor: Actor) -> dict[str, Any]:
         "armor_class": actor.armor_class,
         "hit_points": actor.hit_points,
         "max_hit_points": actor.max_hit_points,
+        "equipped_armor_id": actor.equipped_armor_id,
+        "hit_die": actor.hit_die,
+        "hit_dice_remaining": actor.hit_dice_remaining,
+        "max_resources": dict(actor.max_resources),
+        "spell_slots_max": {str(k): v for k, v in actor.spell_slots_max.items()},
     }
 
 
@@ -113,6 +160,13 @@ def actor_from_dict(d: dict[str, Any]) -> Actor:
         armor_class=d.get("armor_class"),
         hit_points=d.get("hit_points"),
         max_hit_points=d.get("max_hit_points"),
+        equipped_armor_id=d.get("equipped_armor_id"),
+        hit_die=d.get("hit_die"),
+        hit_dice_remaining=d.get("hit_dice_remaining"),
+        max_resources=dict(d.get("max_resources") or {}),
+        spell_slots_max={
+            int(k): int(v) for k, v in (d.get("spell_slots_max") or {}).items()
+        },
     )
 
 
@@ -146,6 +200,8 @@ def combatant_snapshot_to_dict(snap: CombatantSnapshot) -> dict[str, Any]:
         "source_id": snap.source_id,
         "armor_class": snap.armor_class,
         "hit_points": snap.hit_points,
+        "max_hit_points": snap.max_hit_points,
+        "equipped_armor_id": snap.equipped_armor_id,
         "abilities": dict(snap.abilities),
         "resources": dict(snap.resources),
         "proficiency_bonus": snap.proficiency_bonus,
@@ -168,6 +224,8 @@ def combatant_snapshot_from_dict(d: dict[str, Any]) -> CombatantSnapshot:
         source_id=d["source_id"],
         armor_class=d.get("armor_class"),
         hit_points=d.get("hit_points"),
+        max_hit_points=d.get("max_hit_points"),
+        equipped_armor_id=d.get("equipped_armor_id"),
         abilities=dict(d.get("abilities") or {}),
         resources=dict(d.get("resources") or {}),
         proficiency_bonus=d.get("proficiency_bonus"),
@@ -202,6 +260,12 @@ def encounter_state_to_dict(state: EncounterState) -> dict[str, Any]:
             },
             "current_turn_budget": dataclasses.asdict(order.current_turn_budget),
         },
+        # engaged_pairs: each frozenset of two IDs is stored as a sorted 2-element list
+        "engaged_pairs": [
+            sorted(pair)
+            for pair in sorted(state.engaged_pairs, key=lambda p: sorted(p))
+        ],
+        "reactions_spent": sorted(state.reactions_spent),
     }
 
 
@@ -223,12 +287,86 @@ def encounter_state_from_dict(d: dict[str, Any]) -> EncounterState:
         cid: combatant_snapshot_from_dict(snap_d)
         for cid, snap_d in d["combatants"].items()
     }
+    raw_pairs = d.get("engaged_pairs") or []
+    engaged_pairs: frozenset[frozenset[str]] = frozenset(
+        frozenset(pair) for pair in raw_pairs
+    )
+    reactions_spent: frozenset[str] = frozenset(d.get("reactions_spent") or [])
     return EncounterState(
         encounter_id=d["encounter_id"],
         combatants=combatants,
         turn_order=turn_order,
         active=bool(d.get("active", True)),
         defeated_ids=frozenset(d.get("defeated_ids") or []),
+        engaged_pairs=engaged_pairs,
+        reactions_spent=reactions_spent,
+    )
+
+
+# ── WorldClock / Persona serialisation ───────────────────────────────────────
+
+
+def _clock_to_dict(clock: WorldClock) -> dict[str, Any]:
+    return {"day": clock.day, "hour": clock.hour, "minute": clock.minute}
+
+
+def _clock_from_dict(d: dict[str, Any]) -> WorldClock:
+    return WorldClock(
+        day=int(d.get("day", 1)),
+        hour=int(d.get("hour", 8)),
+        minute=int(d.get("minute", 0)),
+    )
+
+
+def _gm_persona_to_dict(p: GmPersona) -> dict[str, Any]:
+    return {
+        "gm_style": p.gm_style,
+        "narrative_voice": p.narrative_voice,
+        "detail_level": p.detail_level,
+    }
+
+
+def _gm_persona_from_dict(d: dict[str, Any]) -> GmPersona:
+    return GmPersona(
+        gm_style=str(d.get("gm_style", "balanced")),
+        narrative_voice=str(d.get("narrative_voice", "third_person")),
+        detail_level=str(d.get("detail_level", "medium")),
+    )
+
+
+def _player_persona_to_dict(p: PlayerPersona) -> dict[str, Any]:
+    return {
+        "character_name": p.character_name,
+        "class_flavor": p.class_flavor,
+        "pronouns": p.pronouns,
+    }
+
+
+def _player_persona_from_dict(d: dict[str, Any]) -> PlayerPersona:
+    return PlayerPersona(
+        character_name=str(d.get("character_name", "")),
+        class_flavor=str(d.get("class_flavor", "")),
+        pronouns=str(d.get("pronouns", "they/them")),
+    )
+
+
+def _companion_to_dict(c: CompanionPersona) -> dict[str, Any]:
+    return {
+        "companion_id": c.companion_id,
+        "character_name": c.character_name,
+        "class_flavor": c.class_flavor,
+        "pronouns": c.pronouns,
+        "role": c.role,
+    }
+
+
+def _companion_from_dict(d: dict[str, Any]) -> CompanionPersona:
+    return CompanionPersona(
+        companion_id=str(d.get("companion_id", "")),
+        character_name=str(d.get("character_name", "")),
+        class_flavor=str(d.get("class_flavor", "")),
+        pronouns=str(d.get("pronouns", "they/them")),
+        role=str(d.get("role", "party_member")),
     )
 
 
@@ -241,6 +379,7 @@ def _scene_to_dict(scene: CampaignScene) -> dict[str, Any]:
         "description_stub": scene.description_stub,
         "combat_active": scene.combat_active,
         "combatants_present": list(scene.combatants_present),
+        "environment_tags": list(scene.environment_tags),
     }
 
 
@@ -250,6 +389,7 @@ def _scene_from_dict(d: dict[str, Any]) -> CampaignScene:
         description_stub=d.get("description_stub", ""),
         combat_active=bool(d.get("combat_active", False)),
         combatants_present=list(d.get("combatants_present") or []),
+        environment_tags=list(d.get("environment_tags") or []),
     )
 
 
@@ -276,6 +416,10 @@ def campaign_to_dict(campaign: CampaignState) -> dict[str, Any]:
             enc_id: encounter_state_to_dict(enc)
             for enc_id, enc in campaign.encounter_states.items()
         },
+        "world_clock": _clock_to_dict(campaign.world_clock),
+        "gm_persona": _gm_persona_to_dict(campaign.gm_persona),
+        "player_persona": _player_persona_to_dict(campaign.player_persona),
+        "companions": [_companion_to_dict(c) for c in campaign.companions],
     }
 
 
@@ -293,6 +437,14 @@ def campaign_from_dict(d: dict[str, Any]) -> CampaignState:
         enc_id: encounter_state_from_dict(enc_d)
         for enc_id, enc_d in (d.get("encounter_states") or {}).items()
     }
+    raw_clock = d.get("world_clock") or {}
+    raw_gm = d.get("gm_persona") or {}
+    raw_player = d.get("player_persona") or {}
+    companions = [
+        _companion_from_dict(c)
+        for c in (d.get("companions") or [])
+        if isinstance(c, dict)
+    ]
     return CampaignState(
         campaign_id=d["campaign_id"],
         campaign_name=d["campaign_name"],
@@ -302,6 +454,18 @@ def campaign_from_dict(d: dict[str, Any]) -> CampaignState:
         session_log_refs=list(d.get("session_log_refs") or []),
         active_encounter_id=d.get("active_encounter_id"),
         encounter_states=encounter_states,
+        world_clock=(
+            _clock_from_dict(raw_clock) if isinstance(raw_clock, dict) else WorldClock()
+        ),
+        gm_persona=(
+            _gm_persona_from_dict(raw_gm) if isinstance(raw_gm, dict) else GmPersona()
+        ),
+        player_persona=(
+            _player_persona_from_dict(raw_player)
+            if isinstance(raw_player, dict)
+            else PlayerPersona()
+        ),
+        companions=companions,
     )
 
 

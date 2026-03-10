@@ -1,0 +1,12 @@
+{
+  "id": "f.sneak_attack",
+  "kind": "feature",
+  "name": "Sneak Attack",
+  "description": "You can deal extra damage to one creature per turn when you have advantage or an ally is adjacent to the target.",
+  "tags": ["rogue", "passive", "damage"],
+  "aliases": ["sneak attack"],
+  "feature_type": "class_feature",
+  "action_type": "free",
+  "usage_key": null,
+  "effect_summary": "Once per turn, add 1d6 damage per two rogue levels to an attack that has advantage or benefits from a flanking ally."
+}

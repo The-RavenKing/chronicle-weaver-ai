@@ -1,0 +1,14 @@
+{
+  "id": "w.handaxe",
+  "name": "Handaxe",
+  "kind": "weapon",
+  "description": "A light one-handed axe that can be thrown or used in melee.",
+  "tags": ["simple", "light", "thrown"],
+  "aliases": ["hand axe"],
+  "damage": "1d6",
+  "damage_type": "slashing",
+  "properties": ["light", "thrown"],
+  "attack_ability": "str",
+  "proficient_required": true,
+  "damage_bonus": 0
+}

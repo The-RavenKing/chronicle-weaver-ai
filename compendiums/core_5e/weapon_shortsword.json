@@ -1,0 +1,13 @@
+{
+  "id": "w.shortsword",
+  "kind": "weapon",
+  "name": "Shortsword",
+  "description": "A light, versatile blade favored by rogues and light-footed fighters.",
+  "tags": ["weapon", "melee", "finesse", "light"],
+  "aliases": ["short sword"],
+  "damage": "1d6",
+  "damage_type": "piercing",
+  "properties": ["finesse", "light"],
+  "attack_ability": "dex",
+  "proficient_required": true
+}

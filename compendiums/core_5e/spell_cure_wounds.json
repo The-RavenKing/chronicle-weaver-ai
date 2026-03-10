@@ -1,0 +1,17 @@
+{
+  "id": "s.cure_wounds",
+  "kind": "spell",
+  "name": "Cure Wounds",
+  "description": "A creature you touch regains hit points equal to 1d8 plus your spellcasting ability modifier.",
+  "tags": ["spell", "healing", "touch", "level1"],
+  "aliases": ["cure wounds", "heal"],
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": "touch",
+  "components": ["V", "S"],
+  "duration": "instantaneous",
+  "action_type": "action",
+  "auto_hit": true,
+  "effect_summary": "Restore 1d8 + spellcasting modifier hit points to a touched creature."
+}

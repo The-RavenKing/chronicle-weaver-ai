@@ -131,6 +131,11 @@ class EncounterState:
     the active combatant's turn budget.
     defeated_ids tracks combatants eliminated this encounter (hp reached 0).
     active is False once the encounter has ended.
+    engaged_pairs tracks melee engagement between combatants as frozensets of
+    two combatant_ids.  When A attacks B in melee, {A, B} is added.
+    reactions_spent tracks combatant_ids that have already used their reaction
+    this round.  A combatant is removed from this set at the start of their
+    next turn (reaction resets at start of your own turn).
     """
 
     encounter_id: str
@@ -138,6 +143,8 @@ class EncounterState:
     turn_order: EncounterTurnOrder
     active: bool = True
     defeated_ids: frozenset[str] = field(default_factory=frozenset)
+    engaged_pairs: frozenset[frozenset[str]] = field(default_factory=frozenset)
+    reactions_spent: frozenset[str] = field(default_factory=frozenset)
 
 
 def create_encounter(
@@ -219,6 +226,9 @@ def end_turn(encounter: EncounterState) -> EncounterState:
     Skips any combatants in defeated_ids.  When the search wraps past the last
     combatant in the list, current_round increments by 1 and the turn budget resets.
     Returns the encounter unchanged if every combatant is defeated.
+
+    Reaction economy: the incoming combatant's reaction is restored at the start
+    of their turn (they are removed from reactions_spent).
     """
     order = encounter.turn_order
     n = len(order.combatant_ids)
@@ -238,20 +248,85 @@ def end_turn(encounter: EncounterState) -> EncounterState:
                 current_round=next_round,
                 current_turn_budget=new_turn_budget(),
             )
-            return dataclasses.replace(encounter, turn_order=new_order)
+            # Restore the next combatant's reaction at the start of their turn.
+            new_reactions_spent = encounter.reactions_spent - {candidate_id}
+            return dataclasses.replace(
+                encounter,
+                turn_order=new_order,
+                reactions_spent=new_reactions_spent,
+            )
 
     # All combatants are defeated — return unchanged.
     return encounter
 
 
-def is_encounter_over(encounter: EncounterState) -> bool:
-    """Return True if all combatants on one side (actors or monsters) are defeated.
+# ── Reaction tracking ────────────────────────────────────────────────────────
 
-    Encounter ends the moment the last member of either side reaches 0 HP.
+
+def has_reaction_available(encounter: EncounterState, combatant_id: str) -> bool:
+    """Return True if combatant_id has not yet spent their reaction this round."""
+    return combatant_id not in encounter.reactions_spent
+
+
+def spend_combatant_reaction(
+    encounter: EncounterState, combatant_id: str
+) -> EncounterState:
+    """Return a new EncounterState with combatant_id's reaction marked as spent.
+
+    Idempotent: calling again on an already-spent combatant has no effect.
+    """
+    if combatant_id in encounter.reactions_spent:
+        return encounter
+    return dataclasses.replace(
+        encounter,
+        reactions_spent=encounter.reactions_spent | {combatant_id},
+    )
+
+
+# ── Engagement tracking ──────────────────────────────────────────────────────
+
+
+def engage(encounter: EncounterState, a_id: str, b_id: str) -> EncounterState:
+    """Return encounter with a melee engagement between a_id and b_id added."""
+    pair = frozenset({a_id, b_id})
+    if pair in encounter.engaged_pairs:
+        return encounter
+    return dataclasses.replace(
+        encounter, engaged_pairs=encounter.engaged_pairs | {pair}
+    )
+
+
+def disengage_combatant(encounter: EncounterState, combatant_id: str) -> EncounterState:
+    """Return encounter with all engagements involving combatant_id removed."""
+    remaining = frozenset(p for p in encounter.engaged_pairs if combatant_id not in p)
+    return dataclasses.replace(encounter, engaged_pairs=remaining)
+
+
+def get_engaged_enemies(encounter: EncounterState, combatant_id: str) -> list[str]:
+    """Return sorted list of combatant_ids engaged with combatant_id.
+
+    Only returns non-defeated combatants.
+    """
+    enemies: list[str] = []
+    for pair in encounter.engaged_pairs:
+        if combatant_id in pair:
+            other = next(cid for cid in pair if cid != combatant_id)
+            if other not in encounter.defeated_ids:
+                enemies.append(other)
+    return sorted(enemies)
+
+
+def is_encounter_over(encounter: EncounterState) -> bool:
+    """Return True if all combatants on one side are defeated.
+
+    Allied side: actors + companions.  Enemy side: monsters.
+    Encounter ends the moment the last member of either side is defeated.
     Returns False if either side has at least one non-defeated combatant.
     """
-    actor_ids = [
-        cid for cid, snap in encounter.combatants.items() if snap.source_type == "actor"
+    allied_ids = [
+        cid
+        for cid, snap in encounter.combatants.items()
+        if snap.source_type in ("actor", "companion")
     ]
     monster_ids = [
         cid
@@ -259,7 +334,7 @@ def is_encounter_over(encounter: EncounterState) -> bool:
         if snap.source_type == "monster"
     ]
 
-    if actor_ids and all(cid in encounter.defeated_ids for cid in actor_ids):
+    if allied_ids and all(cid in encounter.defeated_ids for cid in allied_ids):
         return True
     if monster_ids and all(cid in encounter.defeated_ids for cid in monster_ids):
         return True

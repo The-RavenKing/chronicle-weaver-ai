@@ -1,0 +1,15 @@
+{
+  "id": "w.quarterstaff",
+  "name": "Quarterstaff",
+  "kind": "weapon",
+  "description": "A simple wooden staff, versatile in one or two hands.",
+  "tags": ["simple", "versatile"],
+  "aliases": ["staff", "quarter staff"],
+  "damage": "1d6",
+  "damage_type": "bludgeoning",
+  "properties": ["versatile"],
+  "attack_ability": "str",
+  "proficient_required": true,
+  "damage_bonus": 0,
+  "versatile_damage": "1d8"
+}

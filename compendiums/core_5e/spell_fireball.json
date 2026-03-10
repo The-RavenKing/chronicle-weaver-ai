@@ -1,0 +1,20 @@
+{
+  "id": "s.fireball",
+  "kind": "spell",
+  "name": "Fireball",
+  "description": "A bright streak flashes from your pointing finger to a point you choose within range, then blossoms with a low roar into an explosion of flame.",
+  "tags": ["spell", "damage", "area", "fire", "level3"],
+  "aliases": ["fireball", "fire ball"],
+  "level": 3,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": "150 feet",
+  "components": ["V", "S", "M"],
+  "duration": "instantaneous",
+  "action_type": "action",
+  "save_ability": "dex",
+  "auto_hit": false,
+  "target_type": "area",
+  "concentration": false,
+  "effect_summary": "Each creature in a 20-foot radius sphere must make a DEX saving throw, taking 8d6 fire damage on a failed save or half as much on a success."
+}

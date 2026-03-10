@@ -1,0 +1,17 @@
+{
+  "id": "s.healing_word",
+  "kind": "spell",
+  "name": "Healing Word",
+  "description": "A creature of your choice within range regains hit points equal to 1d4 plus your spellcasting ability modifier.",
+  "tags": ["spell", "healing", "bonus_action", "level1"],
+  "aliases": ["healing word"],
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "bonus_action",
+  "range": "60 feet",
+  "components": ["V"],
+  "duration": "instantaneous",
+  "action_type": "bonus_action",
+  "auto_hit": true,
+  "effect_summary": "Restore 1d4 + spellcasting modifier hit points to a visible creature within 60 feet."
+}

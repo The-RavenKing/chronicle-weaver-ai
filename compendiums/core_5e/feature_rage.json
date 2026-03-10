@@ -1,0 +1,13 @@
+{
+  "id": "f.rage",
+  "kind": "feature",
+  "name": "Rage",
+  "description": "On your turn you can enter a rage as a bonus action, granting advantage on STR checks, resistance to physical damage, and a bonus to damage rolls.",
+  "tags": ["barbarian", "bonus_action", "combat"],
+  "aliases": ["rage", "barbarian rage"],
+  "feature_type": "class_feature",
+  "action_type": "bonus_action",
+  "usage_key": "rage",
+  "effect_summary": "Enter a rage: +2 damage on STR attacks, resistance to bludgeoning/piercing/slashing damage for 1 minute.",
+  "reset_on": "long_rest"
+}

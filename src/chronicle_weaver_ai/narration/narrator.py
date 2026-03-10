@@ -96,7 +96,7 @@ def build_user_prompt(request: NarrationRequest) -> str:
         "11d. If healing_total is present, describe recovery or renewed vigor using only that exact number. Do not invent additional healing.",
         "12. If resolution includes a rejection reason, do not narrate success.",
         "13. You may only describe details supported by Action Result, Resolved Action, or Context Items.",
-        "14. Do not invent setting details (lighting, weather, scenery); use neutral language when unknown.",
+        "14. Do not invent setting details (lighting, weather, scenery) unless provided in the Scene section's environment_tags or description. Use neutral language when unknown.",
         "15. Do not introduce new entities, locations, or items.",
         "16. Encounter Context shows the current round and whose turn it is; you may reference it for immediacy.",
         "17. Active conditions are listed in the Conditions section; do not invent conditions not listed there.",
@@ -344,6 +344,8 @@ def _scene_section(scene: SceneState | None) -> list[str]:
     ]
     if scene.combatants_present:
         lines.append(f"combatants_present: {', '.join(scene.combatants_present)}")
+    if scene.environment_tags:
+        lines.append(f"environment: {', '.join(scene.environment_tags)}")
     lines.append("")
     return lines
 

@@ -4,229 +4,624 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chronicle Weaver</title>
+  <meta name="description" content="Chronicle Weaver — deterministic AI-driven tabletop RPG engine interface." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
+    /* ── Reset & tokens ────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root {
+      --bg-base:      #0a0a14;
+      --bg-surface:   #10101e;
+      --bg-panel:     #13132a;
+      --bg-card:      #1a1a30;
+      --bg-input:     #0d0d1e;
+      --border:       rgba(100, 90, 200, 0.18);
+      --border-glow:  rgba(130, 100, 255, 0.4);
+      --accent:       #7c6af7;
+      --accent-dim:   #4a3fac;
+      --accent-glow:  rgba(124, 106, 247, 0.25);
+      --gold:         #c9a84c;
+      --gold-dim:     rgba(201, 168, 76, 0.25);
+      --red:          #c0444a;
+      --red-dim:      rgba(192, 68, 74, 0.2);
+      --green:        #4caf7a;
+      --green-dim:    rgba(76, 175, 122, 0.2);
+      --amber:        #d08030;
+      --text-hdr:     #e8e0ff;
+      --text-body:    #c0b8d8;
+      --text-muted:   #6a6490;
+      --text-gold:    #c9a84c;
+      --radius-sm:    4px;
+      --radius:       8px;
+      --radius-lg:    12px;
+      --font-serif:   'Cinzel', serif;
+      --font-sans:    'Inter', system-ui, sans-serif;
+      --font-mono:    'JetBrains Mono', monospace;
+    }
+
+    html, body { height: 100%; }
     body {
-      font-family: 'Courier New', monospace;
-      background: #0d0d1a;
-      color: #c0c0d0;
-      display: flex;
-      flex-direction: column;
+      font-family: var(--font-sans);
+      background: var(--bg-base);
+      color: var(--text-body);
       height: 100vh;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background-image:
+        radial-gradient(ellipse at 15% 0%, rgba(80, 60, 160, 0.15) 0%, transparent 55%),
+        radial-gradient(ellipse at 85% 100%, rgba(60, 40, 120, 0.12) 0%, transparent 55%);
     }
 
-    /* ── Header ─────────────────────────────────────────────── */
+    /* ── Scrollbar ───────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--accent-dim); border-radius: 3px; }
+
+    /* ── Header ──────────────────────────────────────────────────── */
     #header {
-      background: #12122a;
-      border-bottom: 1px solid #2a2a5a;
-      padding: 6px 14px;
+      background: rgba(16, 16, 30, 0.95);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      height: 52px;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 20px;
       flex-shrink: 0;
+      backdrop-filter: blur(12px);
+      position: relative;
+      z-index: 10;
     }
-    #header h1 { font-size: 1em; color: #8080d0; letter-spacing: 2px; }
-    #mode-badge {
-      font-size: 0.75em;
-      padding: 2px 8px;
-      border-radius: 3px;
-      background: #1a1a4a;
-      color: #a0a0e0;
-      border: 1px solid #3a3a7a;
-      text-transform: uppercase;
-      letter-spacing: 1px;
+    #header::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
     }
-    #mode-badge.combat { background: #3a1010; color: #e08080; border-color: #7a2020; }
 
-    /* ── Main area ───────────────────────────────────────────── */
+    .header-logo {
+      font-family: var(--font-serif);
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: 3px;
+      color: var(--accent);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-logo .rune { font-size: 1.3rem; opacity: 0.9; }
+
+    .header-sep { width: 1px; height: 24px; background: var(--border); }
+
+    #mode-badge {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      background: var(--bg-card);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+    }
+    #mode-badge.combat {
+      background: var(--red-dim);
+      color: #f07080;
+      border-color: var(--red);
+      box-shadow: 0 0 8px rgba(192, 68, 74, 0.3);
+      animation: pulse-red 2s ease-in-out infinite;
+    }
+    @keyframes pulse-red {
+      0%, 100% { box-shadow: 0 0 8px rgba(192, 68, 74, 0.3); }
+      50%       { box-shadow: 0 0 16px rgba(192, 68, 74, 0.5); }
+    }
+
+    .header-tests {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--green);
+      opacity: 0.7;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Main layout ─────────────────────────────────────────────── */
     #main {
       display: flex;
       flex: 1;
       min-height: 0;
+      gap: 0;
     }
 
-    /* ── Output (narration log) ──────────────────────────────── */
-    #output {
-      flex: 2;
-      overflow-y: auto;
-      padding: 14px 16px;
+    /* ── Left sidebar (actor / encounter) ────────────────────────── */
+    #sidebar-left {
+      width: 240px;
+      min-width: 200px;
+      max-width: 260px;
+      flex-shrink: 0;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      border-right: 1px solid #1e1e40;
+      overflow: hidden;
     }
-    .player-cmd {
-      color: #5070a0;
-      font-size: 0.88em;
-      padding-top: 10px;
-    }
-    .intent-line {
-      font-size: 0.78em;
-      color: #5a8a5a;
-      padding-left: 6px;
-    }
-    .narration-block {
-      border-left: 3px solid #3a3a7a;
-      padding: 8px 10px;
-      color: #c8b880;
-      line-height: 1.55;
-      white-space: pre-wrap;
-      font-size: 0.9em;
-    }
-    .narration-label {
-      font-size: 0.7em;
-      color: #5050a0;
-      margin-bottom: 4px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .warn-line { font-size: 0.78em; color: #a06030; padding-left: 6px; }
-    .err-line  { font-size: 0.78em; color: #c04040; padding-left: 6px; }
 
-    /* ── Sidebar ─────────────────────────────────────────────── */
-    #sidebar {
+    /* ── Main content ─────────────────────────────────────────────── */
+    #content {
       flex: 1;
-      min-width: 220px;
-      max-width: 300px;
-      overflow-y: auto;
-      background: #0f0f20;
-      padding: 10px 12px;
+      min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      overflow: hidden;
     }
-    .panel { display: flex; flex-direction: column; gap: 3px; }
+
+    /* ── Right sidebar (resolution) ───────────────────────────────── */
+    #sidebar-right {
+      width: 240px;
+      min-width: 200px;
+      max-width: 260px;
+      flex-shrink: 0;
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Panel base ──────────────────────────────────────────────── */
+    .panel {
+      border-bottom: 1px solid var(--border);
+      padding: 14px 14px 12px;
+      flex-shrink: 0;
+    }
+    .panel-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+    }
     .panel-title {
-      font-size: 0.7em;
-      color: #5a5a9a;
+      font-family: var(--font-serif);
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 2px;
       text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .panel-title .icon { opacity: 0.8; font-size: 0.85rem; }
+
+    /* ── Actor sheet ─────────────────────────────────────────────── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .stat-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 8px;
+      text-align: center;
+      transition: border-color 0.2s;
+    }
+    .stat-box:hover { border-color: var(--border-glow); }
+    .stat-box .label {
+      font-size: 0.6rem;
       letter-spacing: 1px;
-      border-bottom: 1px solid #1e1e40;
-      padding-bottom: 3px;
+      text-transform: uppercase;
+      color: var(--text-muted);
       margin-bottom: 2px;
     }
-    .kv {
+    .stat-box .value {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--text-hdr);
+    }
+
+    /* HP bar */
+    .hp-bar-wrap {
+      margin: 10px 0 6px;
+    }
+    .hp-label {
       display: flex;
       justify-content: space-between;
-      font-size: 0.8em;
-      gap: 6px;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      margin-bottom: 4px;
     }
-    .kv .k { color: #6070a0; flex-shrink: 0; }
-    .kv .v { color: #d0c080; text-align: right; word-break: break-all; }
-    .sub-title {
-      font-size: 0.68em;
-      color: #444470;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-top: 4px;
-    }
-    .turn-entry {
-      font-size: 0.78em;
-      padding: 2px 4px;
-      border-radius: 2px;
-      white-space: nowrap;
+    .hp-bar {
+      height: 6px;
+      background: var(--bg-card);
+      border-radius: 3px;
       overflow: hidden;
-      text-overflow: ellipsis;
+      border: 1px solid var(--border);
     }
-    .turn-entry.active {
-      background: #1e1e50;
-      color: #c0c0ff;
+    .hp-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), #80e0a0);
+      border-radius: 3px;
+      transition: width 0.4s ease, background 0.3s ease;
     }
+    .hp-fill.low { background: linear-gradient(90deg, var(--amber), #e8a040); }
+    .hp-fill.crit { background: linear-gradient(90deg, var(--red), #e06070); }
+
+    /* Ability scores */
+    .ability-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .ability-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px 4px 3px;
+      text-align: center;
+    }
+    .ability-box .abl { font-size: 0.55rem; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); }
+    .ability-box .abl-val { font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-body); }
+    .ability-box .abl-mod { font-size: 0.6rem; color: var(--accent); }
+
+    /* Economy tokens */
     .economy-row {
-      font-size: 0.8em;
       display: flex;
       gap: 4px;
+      margin-top: 8px;
+      flex-wrap: wrap;
     }
     .token {
-      padding: 1px 6px;
+      font-size: 0.62rem;
+      padding: 3px 7px;
       border-radius: 3px;
-      font-size: 0.75em;
-      background: #1a2a1a;
-      color: #60a060;
-      border: 1px solid #2a5a2a;
+      letter-spacing: 0.5px;
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid rgba(76, 175, 122, 0.4);
+      transition: all 0.2s;
+      cursor: default;
     }
     .token.used {
-      background: #1a1a1a;
-      color: #404040;
-      border-color: #303030;
+      background: var(--bg-card);
+      color: var(--text-muted);
+      border-color: var(--border);
+      text-decoration: line-through;
+      opacity: 0.5;
     }
-    .dim { color: #383858; font-style: italic; font-size: 0.8em; }
 
-    /* ── Input bar ───────────────────────────────────────────── */
+    /* Resources */
+    .resource-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .resource-row .r-name { font-size: 0.7rem; color: var(--text-muted); }
+    .resource-row .r-pips { display: flex; gap: 3px; }
+    .pip {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 1px solid var(--accent-dim);
+    }
+    .pip.empty { background: var(--bg-card); border-color: var(--border); }
+
+    /* ── Encounter order ─────────────────────────────────────────── */
+    .combatant-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 4px;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      cursor: default;
+    }
+    .combatant-row.active {
+      background: rgba(124, 106, 247, 0.12);
+      border-color: rgba(124, 106, 247, 0.35);
+      box-shadow: 0 0 10px rgba(124, 106, 247, 0.15);
+    }
+    .combatant-row.defeated { opacity: 0.35; }
+    .turn-arrow { color: var(--accent); font-size: 0.75rem; width: 12px; flex-shrink: 0; }
+    .c-name { flex: 1; font-size: 0.78rem; color: var(--text-hdr); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .combatant-row.active .c-name { color: var(--accent); font-weight: 500; }
+    .c-hp { font-family: var(--font-mono); font-size: 0.68rem; color: var(--green); flex-shrink: 0; }
+    .c-hp.low { color: var(--amber); }
+    .c-hp.crit { color: var(--red); }
+    .round-badge {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      padding: 2px 8px;
+      background: var(--bg-card);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    /* ── Narration log ───────────────────────────────────────────── */
+    #narration-log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .log-entry { animation: fade-in 0.3s ease; }
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .player-cmd {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--accent);
+      padding: 14px 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .player-cmd::before { content: '›'; font-size: 1rem; opacity: 0.7; }
+
+    .intent-chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+      padding-left: 2px;
+    }
+    .chip {
+      font-size: 0.62rem;
+      padding: 2px 8px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .chip.intent-chip { color: var(--accent); border-color: rgba(124,106,247,0.35); background: rgba(124,106,247,0.08); }
+    .chip.mech-chip   { color: var(--gold);   border-color: rgba(201,168,76,0.3); background: rgba(201,168,76,0.07); }
+
+    .narration-block {
+      margin: 6px 0 4px;
+      border-left: 2px solid var(--accent-dim);
+      padding: 10px 14px;
+      background: rgba(124, 106, 247, 0.04);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      color: var(--text-gold);
+      font-size: 0.88rem;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      font-style: italic;
+    }
+
+    .warn-block {
+      margin: 4px 0;
+      padding: 6px 10px;
+      background: rgba(208, 128, 48, 0.1);
+      border: 1px solid rgba(208, 128, 48, 0.25);
+      border-radius: var(--radius-sm);
+      color: var(--amber);
+      font-size: 0.75rem;
+    }
+    .err-block {
+      margin: 4px 0;
+      padding: 6px 10px;
+      background: var(--red-dim);
+      border: 1px solid rgba(192, 68, 74, 0.35);
+      border-radius: var(--radius-sm);
+      color: #f08090;
+      font-size: 0.75rem;
+    }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: 12px 0;
+    }
+
+    /* ── Empty state ─────────────────────────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 12px;
+      text-align: center;
+      padding: 20px;
+    }
+    .empty-state .glyph { font-size: 2.5rem; opacity: 0.3; }
+    .empty-state .title { font-family: var(--font-serif); font-size: 1.1rem; color: var(--text-muted); letter-spacing: 2px; }
+    .empty-state .sub { font-size: 0.78rem; color: var(--text-muted); opacity: 0.6; line-height: 1.5; max-width: 280px; }
+    .empty-state .hint { font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent); opacity: 0.7; }
+
+    /* ── Resolution panel ───────────────────────────────────────── */
+    .res-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(100, 90, 200, 0.08);
+    }
+    .res-item:last-child { border-bottom: none; }
+    .res-key { font-size: 0.65rem; color: var(--text-muted); letter-spacing: 0.5px; text-transform: capitalize; flex-shrink: 0; }
+    .res-val { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-hdr); text-align: right; word-break: break-all; }
+    .res-val.hit   { color: var(--green); }
+    .res-val.miss  { color: var(--red); }
+
+    /* ── Input bar ───────────────────────────────────────────────── */
     #input-bar {
-      background: #12122a;
-      border-top: 1px solid #2a2a5a;
-      padding: 8px 12px;
+      background: rgba(13, 13, 30, 0.95);
+      border-top: 1px solid var(--border);
+      padding: 10px 16px;
       display: flex;
       gap: 8px;
       flex-shrink: 0;
+      backdrop-filter: blur(8px);
     }
     #player-input {
       flex: 1;
-      background: #0a0a18;
-      color: #d0d0e0;
-      border: 1px solid #2a2a5a;
-      padding: 7px 10px;
-      font-family: inherit;
-      font-size: 0.9em;
-      border-radius: 3px;
+      background: var(--bg-input);
+      color: var(--text-hdr);
+      border: 1px solid var(--border);
+      padding: 9px 14px;
+      font-family: var(--font-sans);
+      font-size: 0.88rem;
+      border-radius: var(--radius);
       outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      caret-color: var(--accent);
     }
-    #player-input:focus { border-color: #4a4aaa; }
-    button {
-      background: #1e1e50;
-      color: #8080d0;
-      border: 1px solid #3a3a8a;
-      padding: 7px 14px;
-      font-family: inherit;
-      font-size: 0.85em;
-      border-radius: 3px;
+    #player-input:focus {
+      border-color: var(--border-glow);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    #player-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+
+    .btn {
+      background: var(--bg-card);
+      color: var(--text-body);
+      border: 1px solid var(--border);
+      padding: 9px 16px;
+      font-family: var(--font-sans);
+      font-size: 0.82rem;
+      font-weight: 500;
+      border-radius: var(--radius);
       cursor: pointer;
+      transition: all 0.18s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
     }
-    button:hover { background: #2a2a6a; color: #b0b0ff; }
-    #demo-btn { color: #608060; border-color: #2a4a2a; background: #101a10; }
-    #demo-btn:hover { background: #1a2a1a; }
+    .btn:hover { border-color: var(--border-glow); color: var(--text-hdr); background: rgba(124,106,247,0.1); }
+    .btn:active { transform: scale(0.97); }
+
+    #submit-btn {
+      background: var(--accent-dim);
+      color: #d0c8ff;
+      border-color: var(--accent);
+    }
+    #submit-btn:hover { background: var(--accent); color: white; box-shadow: 0 0 12px var(--accent-glow); }
+
+    #demo-btn { color: var(--gold-dim); border-color: rgba(201,168,76,0.3); }
+    #demo-btn:hover { color: var(--gold); border-color: var(--gold); background: var(--gold-dim); }
+
+    /* ── Sidebar dim text ────────────────────────────────────────── */
+    .dim { color: var(--text-muted); font-size: 0.78rem; font-style: italic; opacity: 0.7; }
+
+    /* ── Sub-section title ───────────────────────────────────────── */
+    .sub-title {
+      font-size: 0.6rem;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin: 10px 0 4px;
+      padding-bottom: 3px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Spinning loading indicator ──────────────────────────────── */
+    .thinking {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--accent);
+      padding: 6px 14px;
+      background: rgba(124,106,247,0.08);
+      border-radius: var(--radius);
+      border: 1px solid rgba(124,106,247,0.2);
+      margin: 4px 0;
+    }
+    .spinner {
+      width: 12px; height: 12px;
+      border: 2px solid rgba(124,106,247,0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
+<!-- ── Header ───────────────────────────────────────────────────────── -->
 <div id="header">
-  <h1>⚔ CHRONICLE WEAVER</h1>
+  <div class="header-logo">
+    <span class="rune">⚔</span>
+    Chronicle Weaver
+  </div>
+  <div class="header-sep"></div>
   <span id="mode-badge">exploration</span>
+  <div class="header-sep"></div>
+  <button class="btn" id="demo-btn" title="Load a demo scenario">⚡ Load Demo</button>
+  <span class="header-tests">566 tests passing</span>
 </div>
 
+<!-- ── Main ─────────────────────────────────────────────────────────── -->
 <div id="main">
-  <div id="output">
-    <div id="narration-log"></div>
-  </div>
 
-  <div id="sidebar">
+  <!-- Left sidebar -->
+  <div id="sidebar-left">
     <!-- Actor sheet -->
-    <div class="panel" id="actor-panel-wrap">
-      <div class="panel-title">Actor Sheet</div>
-      <div id="actor-panel"><span class="dim">No actor — click Load Demo</span></div>
+    <div class="panel">
+      <div class="panel-title"><span class="icon">🧙</span>Actor Sheet</div>
+      <div id="actor-panel"><span class="dim">No actor loaded</span></div>
     </div>
-
     <!-- Encounter order -->
-    <div class="panel" id="encounter-panel-wrap">
-      <div class="panel-title">Encounter Order</div>
+    <div class="panel-scroll">
+      <div class="panel-title"><span class="icon">⚔</span>Encounter Order</div>
       <div id="encounter-panel"><span class="dim">No encounter</span></div>
     </div>
+  </div>
 
-    <!-- Last resolution -->
-    <div class="panel" id="resolution-panel-wrap">
-      <div class="panel-title">Last Resolution</div>
-      <div id="resolution-panel"><span class="dim">None</span></div>
+  <!-- Main content area -->
+  <div id="content">
+    <div id="narration-log">
+      <div class="empty-state" id="empty-state">
+        <div class="glyph">📜</div>
+        <div class="title">The Chronicle Awaits</div>
+        <div class="sub">Load a demo to begin play, or type your first action below to start a session.</div>
+        <div class="hint">⚡ Load Demo → then: "I attack the goblin with my longsword"</div>
+      </div>
+    </div>
+    <!-- Input bar -->
+    <div id="input-bar">
+      <input id="player-input" type="text" placeholder="What do you do?" autocomplete="off" spellcheck="false" />
+      <button class="btn" id="submit-btn" title="Submit action (Enter)">▶ Submit</button>
     </div>
   </div>
-</div>
 
-<div id="input-bar">
-  <input id="player-input" type="text" placeholder="What do you do?" autocomplete="off" />
-  <button id="submit-btn">Submit</button>
-  <button id="demo-btn">Load Demo</button>
+  <!-- Right sidebar -->
+  <div id="sidebar-right">
+    <div class="panel-scroll">
+      <div class="panel-title"><span class="icon">🎲</span>Last Resolution</div>
+      <div id="resolution-panel"><span class="dim">None yet</span></div>
+    </div>
+  </div>
+
 </div>
 
 <script src="/static/app.js"></script>
